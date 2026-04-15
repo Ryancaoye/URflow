@@ -1,0 +1,8 @@
+# Unity meta files will be needed for UPM
+# Exclude internal docs build artifacts
+docs/node_modules/
+docs/package-lock.json
+
+# OS files
+.DS_Store
+Thumbs.db

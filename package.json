@@ -1,0 +1,19 @@
+{
+  "name": "com.liuyiran.urflow",
+  "version": "1.0.2",
+  "displayName": "URflow",
+  "description": "Unity Animation Bezier Curve Editor. Inspired by Flow for After Effects.",
+  "unity": "2022.3",
+  "author": {
+    "name": "liuyiran02",
+    "email": "liuyiran02@corp.netease.com"
+  },
+  "keywords": [
+    "animation",
+    "bezier",
+    "curve",
+    "easing",
+    "editor"
+  ],
+  "license": "MIT"
+}
