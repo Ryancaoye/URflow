@@ -103,6 +103,18 @@ namespace URflow
                 Undo.RecordObject(info.clip, "URflow Apply Curve");
                 AnimationUtility.SetEditorCurve(info.clip, info.binding, newCurve);
 
+                // Set all affected keyframes to Broken + Free tangent mode
+                // so Unity won't auto-smooth tangents when dragging keyframes
+                for (int i = 0; i < indices.Count; i++)
+                {
+                    int idx = indices[i];
+                    if (idx >= keyframes.Length) continue;
+                    AnimationUtility.SetKeyBroken(newCurve, idx, true);
+                    AnimationUtility.SetKeyLeftTangentMode(newCurve, idx, AnimationUtility.TangentMode.Free);
+                    AnimationUtility.SetKeyRightTangentMode(newCurve, idx, AnimationUtility.TangentMode.Free);
+                }
+                AnimationUtility.SetEditorCurve(info.clip, info.binding, newCurve);
+
                 // Re-read the curve Unity actually stored and update guard snapshots
                 AnimationCurve storedCurve = AnimationUtility.GetEditorCurve(info.clip, info.binding);
                 if (storedCurve != null)
