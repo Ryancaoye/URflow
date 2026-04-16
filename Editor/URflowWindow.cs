@@ -207,22 +207,20 @@ namespace URflow
 
             if (_logoTex != null)
             {
-                // Keep original aspect ratio, scale to desired height
-                float logoHeight = 40f;
+                // Scale logo to fit window width with padding, preserve aspect ratio
                 float aspect = (float)_logoTex.width / _logoTex.height;
-                float logoWidth = logoHeight * aspect;
+                float padding = 80f;
+                float maxWidth = EditorGUIUtility.currentViewWidth - padding;
+                float logoWidth = Mathf.Min(maxWidth, 200f); // cap at 200px
+                float logoHeight = logoWidth / aspect;
 
-                EditorGUILayout.Space(2);
+                EditorGUILayout.Space(4);
                 Rect logoRect = GUILayoutUtility.GetRect(logoWidth, logoHeight,
                     GUILayout.ExpandWidth(false));
-                // Center the texture within the rect, preserving aspect ratio
-                float drawWidth = Mathf.Min(logoRect.width, logoWidth);
-                float drawHeight = drawWidth / aspect;
-                float offsetX = (logoRect.width - drawWidth) * 0.5f;
-                float offsetY = (logoRect.height - drawHeight) * 0.5f;
-                Rect drawRect = new Rect(logoRect.x + offsetX, logoRect.y + offsetY, drawWidth, drawHeight);
+                float offsetX = (EditorGUIUtility.currentViewWidth - logoWidth) * 0.5f - logoRect.x;
+                Rect drawRect = new Rect(logoRect.x + offsetX, logoRect.y, logoWidth, logoHeight);
                 GUI.DrawTexture(drawRect, _logoTex, ScaleMode.ScaleToFit);
-                EditorGUILayout.Space(2);
+                EditorGUILayout.Space(4);
             }
             else
             {
@@ -1433,7 +1431,7 @@ namespace URflow
             // Find the script itself via its known GUID or search, then derive the Icons folder
             string[] searchPaths = new[]
             {
-                "Packages/com.urflow.editor/Editor/Icons",  // UPM package
+                "Packages/com.liuyiran.urflow/Editor/Icons", // UPM package
                 "Assets/URflow/Editor/Icons",                // local install
             };
             foreach (var p in searchPaths)
