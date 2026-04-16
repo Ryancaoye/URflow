@@ -93,7 +93,7 @@ namespace URflow
         private static bool _updateAvailable = false;
         private static double _lastCheckTime = 0;
         private static UnityWebRequest _versionReq;
-        private const string GITHUB_API_URL = "https://api.github.com/repos/Ryancaoye/URflow/releases/latest";
+        private const string VERSION_URL = "https://raw.githubusercontent.com/Ryancaoye/URflow/main/version.txt";
         private const double CHECK_INTERVAL = 180; // re-check every 3 minutes
 
         private static int _lang = -1; // lazy init
@@ -141,7 +141,7 @@ namespace URflow
             if (_latestVersion != null && now - _lastCheckTime < CHECK_INTERVAL) return;
             if (_versionReq != null && !_versionReq.isDone) return;
 
-            _versionReq = UnityWebRequest.Get(GITHUB_API_URL);
+            _versionReq = UnityWebRequest.Get(VERSION_URL);
             _versionReq.SetRequestHeader("User-Agent", "URflow-Unity-Plugin");
             _versionReq.timeout = 10;
             _versionReq.SendWebRequest();
@@ -157,20 +157,13 @@ namespace URflow
             {
                 try
                 {
-                    // Parse "tag_name" from JSON response (lightweight, no JsonUtility needed)
-                    string json = _versionReq.downloadHandler.text;
-                    string key = "\"tag_name\"";
-                    int idx = json.IndexOf(key);
-                    if (idx >= 0)
+                    // version.txt contains a single line like "1.0.2"
+                    string raw = _versionReq.downloadHandler.text.Trim().TrimStart('v', 'V');
+                    if (!string.IsNullOrEmpty(raw))
                     {
-                        int start = json.IndexOf('"', idx + key.Length + 1);
-                        int end = json.IndexOf('"', start + 1);
-                        if (start >= 0 && end > start)
-                        {
-                            _latestVersion = json.Substring(start + 1, end - start - 1).TrimStart('v', 'V');
-                            _updateAvailable = IsNewerVersion(_latestVersion, VERSION);
-                            Debug.Log($"[URflow] Version check OK — local: {VERSION}, remote: {_latestVersion}, updateAvailable: {_updateAvailable}");
-                        }
+                        _latestVersion = raw;
+                        _updateAvailable = IsNewerVersion(_latestVersion, VERSION);
+                        Debug.Log($"[URflow] Version check OK — local: {VERSION}, remote: {_latestVersion}, updateAvailable: {_updateAvailable}");
                     }
                 }
                 catch (Exception e) { Debug.LogWarning("[URflow] Version check parse error: " + e.Message); }
