@@ -169,14 +169,26 @@ namespace URflow
                         {
                             _latestVersion = json.Substring(start + 1, end - start - 1).TrimStart('v', 'V');
                             _updateAvailable = IsNewerVersion(_latestVersion, VERSION);
+                            Debug.Log($"[URflow] Version check OK — local: {VERSION}, remote: {_latestVersion}, updateAvailable: {_updateAvailable}");
                         }
                     }
                 }
-                catch (Exception) { /* silently ignore parse errors */ }
+                catch (Exception e) { Debug.LogWarning("[URflow] Version check parse error: " + e.Message); }
+            }
+            else
+            {
+                Debug.LogWarning($"[URflow] Version check failed: {_versionReq.error} (result: {_versionReq.result})");
             }
             _lastCheckTime = EditorApplication.timeSinceStartup;
             _versionReq.Dispose();
             _versionReq = null;
+
+            // Force repaint so the red dot shows immediately
+            if (_updateAvailable)
+            {
+                foreach (var win in Resources.FindObjectsOfTypeAll<URflowWindow>())
+                    win.Repaint();
+            }
         }
 
         /// <summary>
