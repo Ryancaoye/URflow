@@ -100,11 +100,10 @@ namespace URflow
                 if (!modified) continue;
 
                 AnimationCurve newCurve = new AnimationCurve(keyframes);
-                Undo.RecordObject(info.clip, "URflow Apply Curve");
-                AnimationUtility.SetEditorCurve(info.clip, info.binding, newCurve);
 
-                // Set all affected keyframes to Broken + Free tangent mode
-                // so Unity won't auto-smooth tangents when dragging keyframes
+                // First: set Broken + Free tangent mode on all affected keyframes
+                // This must happen BEFORE setting weighted data, because
+                // SetKeyBroken/SetKeyLeftTangentMode can reset weightedMode
                 for (int i = 0; i < indices.Count; i++)
                 {
                     int idx = indices[i];
@@ -113,6 +112,27 @@ namespace URflow
                     AnimationUtility.SetKeyLeftTangentMode(newCurve, idx, AnimationUtility.TangentMode.Free);
                     AnimationUtility.SetKeyRightTangentMode(newCurve, idx, AnimationUtility.TangentMode.Free);
                 }
+
+                // Then: re-apply weighted data on top (in case Broken/Free reset it)
+                Keyframe[] fixedKeys = newCurve.keys;
+                for (int i = 0; i < indices.Count - 1; i++)
+                {
+                    int idxA = indices[i];
+                    int idxB = indices[i + 1];
+                    if (idxA >= fixedKeys.Length || idxB >= fixedKeys.Length) continue;
+
+                    fixedKeys[idxA].outTangent = keyframes[idxA].outTangent;
+                    fixedKeys[idxA].outWeight = keyframes[idxA].outWeight;
+                    fixedKeys[idxA].weightedMode = keyframes[idxA].weightedMode;
+
+                    fixedKeys[idxB].inTangent = keyframes[idxB].inTangent;
+                    fixedKeys[idxB].inWeight = keyframes[idxB].inWeight;
+                    fixedKeys[idxB].weightedMode = keyframes[idxB].weightedMode;
+                }
+                newCurve = new AnimationCurve(fixedKeys);
+
+                // Single write to clip
+                Undo.RecordObject(info.clip, "URflow Apply Curve");
                 AnimationUtility.SetEditorCurve(info.clip, info.binding, newCurve);
 
                 // Re-read the curve Unity actually stored and update guard snapshots
