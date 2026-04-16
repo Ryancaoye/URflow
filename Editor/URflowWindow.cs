@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.Networking;
 
 namespace URflow
 {
@@ -88,14 +87,6 @@ namespace URflow
         private const string VERSION = "1.0.1";
         private static readonly string PREF_LANG = "URflow_Language"; // 0=EN, 1=CN
 
-        // ── Update Check ──
-        private static string _latestVersion = null;   // null = not checked yet
-        private static bool _updateAvailable = false;
-        private static double _lastCheckTime = 0;
-        private static UnityWebRequest _versionReq;
-        private const string VERSION_URL = "https://raw.githubusercontent.com/Ryancaoye/URflow/main/version.txt";
-        private const double CHECK_INTERVAL = 180; // re-check every 3 minutes
-
         private static int _lang = -1; // lazy init
         private static int Lang
         {
@@ -129,78 +120,6 @@ namespace URflow
             _userPresets = PresetManager.LoadUserPresets();
             _favorites = PresetManager.LoadFavorites();
             SyncParam();
-            CheckForUpdate();
-        }
-
-        /// <summary>
-        /// Starts an async version check against GitHub releases.
-        /// </summary>
-        private static void CheckForUpdate()
-        {
-            double now = EditorApplication.timeSinceStartup;
-            if (_latestVersion != null && now - _lastCheckTime < CHECK_INTERVAL) return;
-            if (_versionReq != null && !_versionReq.isDone) return;
-
-            _versionReq = UnityWebRequest.Get(VERSION_URL);
-            _versionReq.SetRequestHeader("User-Agent", "URflow-Unity-Plugin");
-            _versionReq.certificateHandler = new BypassCertHandler();
-            _versionReq.timeout = 10;
-            _versionReq.SendWebRequest();
-            EditorApplication.update += PollVersionCheck;
-        }
-
-        private static void PollVersionCheck()
-        {
-            if (_versionReq == null || !_versionReq.isDone) return;
-            EditorApplication.update -= PollVersionCheck;
-
-            if (_versionReq.result == UnityWebRequest.Result.Success)
-            {
-                try
-                {
-                    // version.txt contains a single line like "1.0.2"
-                    string raw = _versionReq.downloadHandler.text.Trim().TrimStart('v', 'V');
-                    if (!string.IsNullOrEmpty(raw))
-                    {
-                        _latestVersion = raw;
-                        _updateAvailable = IsNewerVersion(_latestVersion, VERSION);
-                        Debug.Log($"[URflow] Version check OK — local: {VERSION}, remote: {_latestVersion}, updateAvailable: {_updateAvailable}");
-                    }
-                }
-                catch (Exception e) { Debug.LogWarning("[URflow] Version check parse error: " + e.Message); }
-            }
-            else
-            {
-                Debug.LogWarning($"[URflow] Version check failed: {_versionReq.error} (result: {_versionReq.result})");
-            }
-            _lastCheckTime = EditorApplication.timeSinceStartup;
-            _versionReq.Dispose();
-            _versionReq = null;
-
-            // Force repaint so the red dot shows immediately
-            if (_updateAvailable)
-            {
-                foreach (var win in Resources.FindObjectsOfTypeAll<URflowWindow>())
-                    win.Repaint();
-            }
-        }
-
-        /// <summary>
-        /// Compare semantic versions: returns true if remote > local.
-        /// </summary>
-        private static bool IsNewerVersion(string remote, string local)
-        {
-            string[] rParts = remote.Split('.');
-            string[] lParts = local.Split('.');
-            int len = Mathf.Max(rParts.Length, lParts.Length);
-            for (int i = 0; i < len; i++)
-            {
-                int r = i < rParts.Length && int.TryParse(rParts[i], out int rv) ? rv : 0;
-                int l = i < lParts.Length && int.TryParse(lParts[i], out int lv) ? lv : 0;
-                if (r > l) return true;
-                if (r < l) return false;
-            }
-            return false;
         }
 
         private void Update()
@@ -1083,13 +1002,6 @@ namespace URflow
                 Repaint();
             }
 
-            // Draw red dot on gear icon if update available
-            if (_updateAvailable)
-            {
-                Rect gearRect = GUILayoutUtility.GetLastRect();
-                DrawRedDot(new Vector2(gearRect.xMax - 3f, gearRect.y + 2f), 4f);
-            }
-
             GUILayout.FlexibleSpace();
 
             GUIStyle verStyle = new GUIStyle(EditorStyles.label);
@@ -1242,23 +1154,13 @@ namespace URflow
             // ── Menu Cards ──
             DrawMenuCard("\u2191", L("Updates", "\u68c0\u67e5\u66f4\u65b0"), L("manage updates", "\u7ba1\u7406\u66f4\u65b0"), cardH, cardPad, cardBg, cardHover, titleCol, subCol, delegate()
             {
-                if (_updateAvailable && _latestVersion != null)
-                {
-                    bool open = EditorUtility.DisplayDialog("URflow",
-                        L("Current version: " + VERSION + "\nNew version available: v" + _latestVersion + "\n\nOpen GitHub release page?",
-                          "\u5f53\u524d\u7248\u672c\uff1a" + VERSION + "\n\u53d1\u73b0\u65b0\u7248\u672c\uff1av" + _latestVersion + "\n\n\u662f\u5426\u6253\u5f00 GitHub \u53d1\u5e03\u9875\uff1f"),
-                        L("Open", "\u6253\u5f00"), L("Later", "\u7a0d\u540e"));
-                    if (open)
-                        Application.OpenURL("https://github.com/Ryancaoye/URflow/releases/latest");
-                }
-                else
-                {
-                    EditorUtility.DisplayDialog("URflow",
-                        L("Current version: " + VERSION + "\nYou are using the latest version.",
-                          "\u5f53\u524d\u7248\u672c\uff1a" + VERSION + "\n\u5df2\u662f\u6700\u65b0\u7248\u672c\u3002"),
-                        L("OK", "\u786e\u5b9a"));
-                }
-            }, _updateAvailable);
+                bool open = EditorUtility.DisplayDialog("URflow",
+                    L("Current version: " + VERSION + "\n\nOpen GitHub release page to check for updates?",
+                      "\u5f53\u524d\u7248\u672c\uff1a" + VERSION + "\n\n\u662f\u5426\u6253\u5f00 GitHub \u53d1\u5e03\u9875\u67e5\u770b\u66f4\u65b0\uff1f"),
+                    L("Open", "\u6253\u5f00"), L("Cancel", "\u53d6\u6d88"));
+                if (open)
+                    Application.OpenURL("https://github.com/Ryancaoye/URflow/releases/latest");
+            }, false);
 
             DrawMenuCard("\u2630", L("Language", "\u8bed\u8a00\u8bbe\u7f6e"), L("switch language", "\u5207\u6362\u8bed\u8a00"), cardH, cardPad, cardBg, cardHover, titleCol, subCol, delegate()
             {
@@ -1592,14 +1494,5 @@ namespace URflow
             _mat.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
             _mat.SetInt("_ZWrite", 0);
         }
-    }
-
-    /// <summary>
-    /// Bypasses SSL certificate validation for version check requests.
-    /// Unity Editor's HTTP stack may reject valid certs in some network environments.
-    /// </summary>
-    internal class BypassCertHandler : CertificateHandler
-    {
-        protected override bool ValidateCertificate(byte[] certificateData) => true;
     }
 }
