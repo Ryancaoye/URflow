@@ -143,6 +143,7 @@ namespace URflow
 
             _versionReq = UnityWebRequest.Get(VERSION_URL);
             _versionReq.SetRequestHeader("User-Agent", "URflow-Unity-Plugin");
+            _versionReq.certificateHandler = new BypassCertHandler();
             _versionReq.timeout = 10;
             _versionReq.SendWebRequest();
             EditorApplication.update += PollVersionCheck;
@@ -1591,5 +1592,14 @@ namespace URflow
             _mat.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
             _mat.SetInt("_ZWrite", 0);
         }
+    }
+
+    /// <summary>
+    /// Bypasses SSL certificate validation for version check requests.
+    /// Unity Editor's HTTP stack may reject valid certs in some network environments.
+    /// </summary>
+    internal class BypassCertHandler : CertificateHandler
+    {
+        protected override bool ValidateCertificate(byte[] certificateData) => true;
     }
 }
