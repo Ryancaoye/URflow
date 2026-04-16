@@ -207,18 +207,18 @@ namespace URflow
 
             if (_logoTex != null)
             {
-                // Scale logo to fit window width with padding, preserve aspect ratio
+                // Fixed height, derive width from aspect ratio
+                float logoHeight = 50f;
                 float aspect = (float)_logoTex.width / _logoTex.height;
-                float padding = 80f;
-                float maxWidth = EditorGUIUtility.currentViewWidth - padding;
-                float logoWidth = Mathf.Min(maxWidth, 200f); // cap at 200px
-                float logoHeight = logoWidth / aspect;
+                float logoWidth = logoHeight * aspect;
 
-                EditorGUILayout.Space(4);
+                EditorGUILayout.Space(6);
                 Rect logoRect = GUILayoutUtility.GetRect(logoWidth, logoHeight,
-                    GUILayout.ExpandWidth(false));
-                float offsetX = (EditorGUIUtility.currentViewWidth - logoWidth) * 0.5f - logoRect.x;
-                Rect drawRect = new Rect(logoRect.x + offsetX, logoRect.y, logoWidth, logoHeight);
+                    GUILayout.ExpandWidth(true), GUILayout.Height(logoHeight));
+                Rect drawRect = new Rect(
+                    logoRect.x + (logoRect.width - logoWidth) * 0.5f,
+                    logoRect.y,
+                    logoWidth, logoHeight);
                 GUI.DrawTexture(drawRect, _logoTex, ScaleMode.ScaleToFit);
                 EditorGUILayout.Space(4);
             }
