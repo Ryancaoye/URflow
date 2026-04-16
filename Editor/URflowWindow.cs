@@ -94,7 +94,7 @@ namespace URflow
         private static double _lastCheckTime = 0;
         private static UnityWebRequest _versionReq;
         private const string GITHUB_API_URL = "https://api.github.com/repos/Ryancaoye/URflow/releases/latest";
-        private const double CHECK_INTERVAL = 3600; // re-check every hour
+        private const double CHECK_INTERVAL = 120; // re-check every 2 minutes (testing)
 
         private static int _lang = -1; // lazy init
         private static int Lang
