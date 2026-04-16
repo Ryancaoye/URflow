@@ -1426,11 +1426,34 @@ namespace URflow
         }
 
         private static Dictionary<string, Texture2D> _iconCache = new Dictionary<string, Texture2D>();
+        private static string _iconFolder;
+        private static string GetIconFolder()
+        {
+            if (_iconFolder != null) return _iconFolder;
+            // Find the script itself via its known GUID or search, then derive the Icons folder
+            string[] searchPaths = new[]
+            {
+                "Packages/com.urflow.editor/Editor/Icons",  // UPM package
+                "Assets/URflow/Editor/Icons",                // local install
+            };
+            foreach (var p in searchPaths)
+            {
+                if (AssetDatabase.IsValidFolder(p))
+                {
+                    _iconFolder = p;
+                    return _iconFolder;
+                }
+            }
+            _iconFolder = "";
+            return _iconFolder;
+        }
         private static Texture2D LoadIcon(string name)
         {
             if (_iconCache.ContainsKey(name) && _iconCache[name] != null)
                 return _iconCache[name];
-            string[] guids = AssetDatabase.FindAssets(name + " t:Texture2D", new[] { "Assets/URflow/Editor/Icons" });
+            string folder = GetIconFolder();
+            if (string.IsNullOrEmpty(folder)) return null;
+            string[] guids = AssetDatabase.FindAssets(name + " t:Texture2D", new[] { folder });
             if (guids.Length > 0)
             {
                 string path = AssetDatabase.GUIDToAssetPath(guids[0]);
