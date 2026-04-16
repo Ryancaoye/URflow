@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Networking;
 
 namespace URflow
 {
@@ -86,6 +88,14 @@ namespace URflow
         private const string VERSION = "1.0.1";
         private static readonly string PREF_LANG = "URflow_Language"; // 0=EN, 1=CN
 
+        // ── Update Check ──
+        private static string _latestVersion = null;   // null = not checked yet
+        private static bool _updateAvailable = false;
+        private static double _lastCheckTime = 0;
+        private static UnityWebRequest _versionReq;
+        private const string GITHUB_API_URL = "https://api.github.com/repos/Ryancaoye/URflow/releases/latest";
+        private const double CHECK_INTERVAL = 3600; // re-check every hour
+
         private static int _lang = -1; // lazy init
         private static int Lang
         {
@@ -119,6 +129,72 @@ namespace URflow
             _userPresets = PresetManager.LoadUserPresets();
             _favorites = PresetManager.LoadFavorites();
             SyncParam();
+            CheckForUpdate();
+        }
+
+        /// <summary>
+        /// Starts an async version check against GitHub releases.
+        /// </summary>
+        private static void CheckForUpdate()
+        {
+            double now = EditorApplication.timeSinceStartup;
+            if (_latestVersion != null && now - _lastCheckTime < CHECK_INTERVAL) return;
+            if (_versionReq != null && !_versionReq.isDone) return;
+
+            _versionReq = UnityWebRequest.Get(GITHUB_API_URL);
+            _versionReq.SetRequestHeader("User-Agent", "URflow-Unity-Plugin");
+            _versionReq.timeout = 10;
+            _versionReq.SendWebRequest();
+            EditorApplication.update += PollVersionCheck;
+        }
+
+        private static void PollVersionCheck()
+        {
+            if (_versionReq == null || !_versionReq.isDone) return;
+            EditorApplication.update -= PollVersionCheck;
+
+            if (_versionReq.result == UnityWebRequest.Result.Success)
+            {
+                try
+                {
+                    // Parse "tag_name" from JSON response (lightweight, no JsonUtility needed)
+                    string json = _versionReq.downloadHandler.text;
+                    string key = "\"tag_name\"";
+                    int idx = json.IndexOf(key);
+                    if (idx >= 0)
+                    {
+                        int start = json.IndexOf('"', idx + key.Length + 1);
+                        int end = json.IndexOf('"', start + 1);
+                        if (start >= 0 && end > start)
+                        {
+                            _latestVersion = json.Substring(start + 1, end - start - 1).TrimStart('v', 'V');
+                            _updateAvailable = IsNewerVersion(_latestVersion, VERSION);
+                        }
+                    }
+                }
+                catch (Exception) { /* silently ignore parse errors */ }
+            }
+            _lastCheckTime = EditorApplication.timeSinceStartup;
+            _versionReq.Dispose();
+            _versionReq = null;
+        }
+
+        /// <summary>
+        /// Compare semantic versions: returns true if remote > local.
+        /// </summary>
+        private static bool IsNewerVersion(string remote, string local)
+        {
+            string[] rParts = remote.Split('.');
+            string[] lParts = local.Split('.');
+            int len = Mathf.Max(rParts.Length, lParts.Length);
+            for (int i = 0; i < len; i++)
+            {
+                int r = i < rParts.Length && int.TryParse(rParts[i], out int rv) ? rv : 0;
+                int l = i < lParts.Length && int.TryParse(lParts[i], out int lv) ? lv : 0;
+                if (r > l) return true;
+                if (r < l) return false;
+            }
+            return false;
         }
 
         private void Update()
@@ -1001,6 +1077,13 @@ namespace URflow
                 Repaint();
             }
 
+            // Draw red dot on gear icon if update available
+            if (_updateAvailable)
+            {
+                Rect gearRect = GUILayoutUtility.GetLastRect();
+                DrawRedDot(new Vector2(gearRect.xMax - 3f, gearRect.y + 2f), 4f);
+            }
+
             GUILayout.FlexibleSpace();
 
             GUIStyle verStyle = new GUIStyle(EditorStyles.label);
@@ -1153,11 +1236,23 @@ namespace URflow
             // ── Menu Cards ──
             DrawMenuCard("\u2191", L("Updates", "\u68c0\u67e5\u66f4\u65b0"), L("manage updates", "\u7ba1\u7406\u66f4\u65b0"), cardH, cardPad, cardBg, cardHover, titleCol, subCol, delegate()
             {
-                EditorUtility.DisplayDialog("URflow",
-                    L("Current version: " + VERSION + "\nYou are using the latest version.",
-                      "\u5f53\u524d\u7248\u672c\uff1a" + VERSION + "\n\u5df2\u662f\u6700\u65b0\u7248\u672c\u3002"),
-                    L("OK", "\u786e\u5b9a"));
-            });
+                if (_updateAvailable && _latestVersion != null)
+                {
+                    bool open = EditorUtility.DisplayDialog("URflow",
+                        L("Current version: " + VERSION + "\nNew version available: v" + _latestVersion + "\n\nOpen GitHub release page?",
+                          "\u5f53\u524d\u7248\u672c\uff1a" + VERSION + "\n\u53d1\u73b0\u65b0\u7248\u672c\uff1av" + _latestVersion + "\n\n\u662f\u5426\u6253\u5f00 GitHub \u53d1\u5e03\u9875\uff1f"),
+                        L("Open", "\u6253\u5f00"), L("Later", "\u7a0d\u540e"));
+                    if (open)
+                        Application.OpenURL("https://github.com/Ryancaoye/URflow/releases/latest");
+                }
+                else
+                {
+                    EditorUtility.DisplayDialog("URflow",
+                        L("Current version: " + VERSION + "\nYou are using the latest version.",
+                          "\u5f53\u524d\u7248\u672c\uff1a" + VERSION + "\n\u5df2\u662f\u6700\u65b0\u7248\u672c\u3002"),
+                        L("OK", "\u786e\u5b9a"));
+                }
+            }, _updateAvailable);
 
             DrawMenuCard("\u2630", L("Language", "\u8bed\u8a00\u8bbe\u7f6e"), L("switch language", "\u5207\u6362\u8bed\u8a00"), cardH, cardPad, cardBg, cardHover, titleCol, subCol, delegate()
             {
@@ -1224,7 +1319,7 @@ namespace URflow
 
         private void DrawMenuCard(string icon, string title, string subtitle,
             float cardH, float cardPad, Color cardBg, Color cardHover,
-            Color titleCol, Color subCol, System.Action onClick)
+            Color titleCol, Color subCol, System.Action onClick, bool showBadge = false)
         {
             EditorGUILayout.BeginHorizontal();
             GUILayout.Space(Pad);
@@ -1260,6 +1355,12 @@ namespace URflow
             Rect subRect = new Rect(cardRect.x + 56, cardRect.y + 26, cardRect.width - 64, 16);
             GUI.Label(subRect, subtitle, subStyle);
 
+            // Red badge dot
+            if (showBadge)
+            {
+                DrawRedDot(new Vector2(cardRect.xMax - 14f, cardRect.y + 10f), 5f);
+            }
+
             // Click handler
             if (e.type == EventType.MouseDown && e.button == 0 && hover)
             {
@@ -1273,6 +1374,18 @@ namespace URflow
         }
 
         // ═══════ Helpers ═══════
+
+        /// <summary>
+        /// Draw a small red notification dot at the given center position.
+        /// </summary>
+        private static void DrawRedDot(Vector2 center, float radius)
+        {
+            Rect dotRect = new Rect(center.x - radius, center.y - radius, radius * 2f, radius * 2f);
+            Color prev = GUI.color;
+            GUI.color = new Color(1f, 0.25f, 0.25f);
+            GUI.DrawTexture(dotRect, EditorGUIUtility.whiteTexture, ScaleMode.ScaleToFit, true, 1f);
+            GUI.color = prev;
+        }
 
         /// <summary>
         /// Creates a GUIStyle based on GUI.skin.button with green hover state.
