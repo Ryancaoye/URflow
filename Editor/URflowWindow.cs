@@ -208,7 +208,7 @@ namespace URflow
             if (_logoTex != null)
             {
                 // Fixed height, derive width from aspect ratio
-                float logoHeight = 50f;
+                float logoHeight = 35f;
                 float aspect = (float)_logoTex.width / _logoTex.height;
                 float logoWidth = logoHeight * aspect;
 
