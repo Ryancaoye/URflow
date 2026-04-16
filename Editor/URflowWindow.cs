@@ -1154,12 +1154,7 @@ namespace URflow
             // ── Menu Cards ──
             DrawMenuCard("\u2191", L("Updates", "\u68c0\u67e5\u66f4\u65b0"), L("manage updates", "\u7ba1\u7406\u66f4\u65b0"), cardH, cardPad, cardBg, cardHover, titleCol, subCol, delegate()
             {
-                bool open = EditorUtility.DisplayDialog("URflow",
-                    L("Current version: " + VERSION + "\n\nOpen GitHub release page to check for updates?",
-                      "\u5f53\u524d\u7248\u672c\uff1a" + VERSION + "\n\n\u662f\u5426\u6253\u5f00 GitHub \u53d1\u5e03\u9875\u67e5\u770b\u66f4\u65b0\uff1f"),
-                    L("Open", "\u6253\u5f00"), L("Cancel", "\u53d6\u6d88"));
-                if (open)
-                    Application.OpenURL("https://github.com/Ryancaoye/URflow/releases/latest");
+                UnityEditor.PackageManager.UI.Window.Open("com.liuyiran.urflow");
             }, false);
 
             DrawMenuCard("\u2630", L("Language", "\u8bed\u8a00\u8bbe\u7f6e"), L("switch language", "\u5207\u6362\u8bed\u8a00"), cardH, cardPad, cardBg, cardHover, titleCol, subCol, delegate()
