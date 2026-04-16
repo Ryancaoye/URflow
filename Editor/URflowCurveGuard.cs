@@ -182,23 +182,14 @@ namespace URflow
                 Keyframe kB = curve.keys[pk.idxB];
 
                 // Check: has Unity reset the weighted data?
+                // Only trigger on weightedMode reset (Unity strips weighted mode
+                // when dragging keyframes). Do NOT trigger on tangent/weight value
+                // changes — those are intentional user edits in the Curves view.
                 bool resetDetected = false;
 
-                // Check weightedMode first — fastest indicator
                 if (!HasWeightedOut(kA.weightedMode) || !HasWeightedIn(kB.weightedMode))
                 {
                     resetDetected = true;
-                }
-                else
-                {
-                    // weightedMode is fine; check if tangent/weight values drifted
-                    // from our snapshot (small epsilon to avoid float noise)
-                    const float eps = 0.001f;
-                    if (Mathf.Abs(kA.outWeight - cc.snapOutWeightA) > eps
-                        || Mathf.Abs(kB.inWeight - cc.snapInWeightB) > eps)
-                    {
-                        resetDetected = true;
-                    }
                 }
 
                 if (resetDetected)
