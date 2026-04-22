@@ -258,7 +258,7 @@ namespace URflow
             float aspect = (float)_logoTex.width / _logoTex.height;
             float logoWidth = logoHeight * aspect;
             float x = (position.width - logoWidth) / 2f;
-            float y = 6f; // small top margin
+            float y = 14f; // top margin (adjusted downward)
             Rect drawRect = new Rect(x, y, logoWidth, logoHeight);
             GUI.DrawTexture(drawRect, _logoTex, ScaleMode.ScaleToFit);
         }
