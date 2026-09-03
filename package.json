@@ -1,6 +1,6 @@
 {
   "name": "com.liuyiran.urflow",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "displayName": "URflow",
   "description": "Unity Animation Bezier Curve Editor. Inspired by Flow for After Effects.",
   "unity": "2022.3",

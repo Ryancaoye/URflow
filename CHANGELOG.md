@@ -2,6 +2,31 @@
 
 All notable changes to URflow will be documented in this file.
 
+## [1.0.3] - 2026-09-03
+
+> Code changes in this release landed between 2026-04-16 and 2026-04-22 but were
+> never versioned. Released as 1.0.3 to give them a stable tag.
+
+### Fixed
+- **First-time Apply not working** — Tangent mode is now set to Broken/Free *before* writing weighted tangent data, preventing Unity from resetting `weightedMode`.
+- **CurveGuard fighting manual edits** — CurveGuard now only restores curves when `weightedMode` is actually reset, so curves can be edited by hand in Curves view without being snapped back.
+- **Icons not loading when installed as a UPM package** — Corrected asset paths for package-relative loading.
+- **Logo aspect ratio distortion** — Fixed height plus `nPOTScale=None` on the texture import settings.
+- **Version number shown in the UI was stuck at `1.0.1`** — The `VERSION` constant in `URflowWindow.cs` was never bumped, so the header, footer and About dialog all displayed the wrong version. Now sourced consistently with `package.json` / `version.txt`.
+
+### Added
+- `.meta` files committed for all assets — GUIDs are now stable across installs and upgrades, so references survive updating the package.
+- **Apply auto-sets Broken + Free tangent mode** on affected keyframes, preventing Unity from auto-smoothing them on the next drag.
+- **Updates entry in Settings** — Opens the Package Manager window focused on `com.liuyiran.urflow`.
+
+### Changed
+- **New logo** — Minimal curve design with gradient fill; asset size reduced 142 KB → 106 KB.
+- **Removed automatic update checking.** The original implementation polled GitHub (API, then raw `version.txt`) and required disabling SSL certificate validation to get through a corporate firewall. That was fragile and unsafe, and the target Unity editors have no outbound network access anyway. The Updates entry now simply opens Package Manager.
+
+### Known issues
+- `Editor/Presets.meta` is an orphan `.meta` (git cannot track the empty folder it describes). Unity may log a harmless warning on import.
+- `DrawRedDot` / the `showBadge` parameter on `DrawMenuCard` are leftovers from the removed update-check feature. No call site passes `showBadge: true`, so the code is unreachable. Left in place to keep this release limited to versioning.
+
 ## [1.0.2] - 2026-04-15
 
 ### Fixed

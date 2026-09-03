@@ -84,7 +84,7 @@ namespace URflow
         private bool _showSettings = false;
         private bool _showSaveDialog = false;
         private string _savePresetName = "";
-        private const string VERSION = "1.0.1";
+        private const string VERSION = "1.0.3";
         private static readonly string PREF_LANG = "URflow_Language"; // 0=EN, 1=CN
 
         private static int _lang = -1; // lazy init
