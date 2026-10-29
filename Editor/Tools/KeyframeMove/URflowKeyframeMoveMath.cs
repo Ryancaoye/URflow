@@ -145,7 +145,7 @@ namespace URflow
                 float newValue;
                 double value = mode == URflowKeyframeMoveMode.Proportional
                     ? (double)key.value * amount
-                    : (double)key.value + amount;
+                    : TranslateValue(key.value, originalAnchorValue, targetValue);
                 if (!TryToFloat(value, out newValue))
                 {
                     error = "Moving keyframe " + (i + 1) + " would produce an invalid value.";
@@ -183,6 +183,26 @@ namespace URflow
                 transformedCurve, originalAnchorValue, targetValue, displayAmount,
                 hasChanges, anchor, mode);
             return true;
+        }
+
+        private static double TranslateValue(float value, float anchorValue, float targetValue)
+        {
+            // Sum the same uniform offset in descending magnitude. Opposing large
+            // operands cancel before a small target/value is added, including no-ops.
+            double first = value;
+            double second = -(double)anchorValue;
+            double third = targetValue;
+            if (Math.Abs(first) < Math.Abs(second)) Swap(ref first, ref second);
+            if (Math.Abs(second) < Math.Abs(third)) Swap(ref second, ref third);
+            if (Math.Abs(first) < Math.Abs(second)) Swap(ref first, ref second);
+            return (first + second) + third;
+        }
+
+        private static void Swap(ref double first, ref double second)
+        {
+            double temporary = first;
+            first = second;
+            second = temporary;
         }
 
         private static bool TryScaleTangent(float tangent, double factor, out float result)
