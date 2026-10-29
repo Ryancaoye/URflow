@@ -25,6 +25,7 @@ namespace URflow
         private int _selectedPresetIndex = -1;
         private int _filter = 0; // 0=All, 1=Favorites, 2=UserPresets
         private int _viewMode = 0; // 0=List, 1=Grid
+        private URflowToolsHost _toolsHost;
 
         // ── Layout ──
         private const float CurveH = 220f;
@@ -114,12 +115,25 @@ namespace URflow
 
         private void OnEnable()
         {
+            if (_toolsHost != null) _toolsHost.Dispose();
+            _toolsHost = new URflowToolsHost(Repaint);
             wantsMouseMove = true;
             wantsMouseEnterLeaveWindow = true;
             _builtInPresets = PresetLibrary.GetBuiltInPresets();
             _userPresets = PresetManager.LoadUserPresets();
             _favorites = PresetManager.LoadFavorites();
             SyncParam();
+        }
+
+        private void OnDisable()
+        {
+            if (_toolsHost != null) _toolsHost.Dispose();
+            _toolsHost = null;
+        }
+
+        private void OnFocus()
+        {
+            if (_toolsHost != null && !_showSettings) _toolsHost.RefreshIfOpen();
         }
 
         private void Update()
@@ -149,44 +163,61 @@ namespace URflow
             if (_showSaveDialog)
             {
                 // Draw main UI visually but disabled (no interaction)
-                GUI.enabled = false;
-                EditorGUILayout.BeginVertical();
-                EditorGUILayout.Space(2);
-                DrawTitleOverlay();
-                DrawCurveEditor();
-                EditorGUILayout.Space(4);
-                DrawParams();
-                EditorGUILayout.Space(4);
-                DrawApplyBar();
-                EditorGUILayout.Space(8);
-                DrawPresets();
-                GUILayout.FlexibleSpace();
-                DrawSettingsFooter();
-                EditorGUILayout.EndVertical();
-                GUI.enabled = true;
+                using (new EditorGUI.DisabledScope(true)) DrawMainContent();
                 DrawSaveDialog();
                 return;
             }
 
+            DrawMainContent();
+        }
+
+        private void DrawMainContent()
+        {
             // Use a vertical group to manage layout flow
             EditorGUILayout.BeginVertical();
+            try
+            {
+                bool blockBackground = _toolsHost != null && _toolsHost.IsOpen;
+                Event backgroundEvent = Event.current;
+                bool hideWheel = blockBackground && backgroundEvent.type == EventType.ScrollWheel;
+                // IMGUI scroll views handle wheel events even when GUI.enabled is false.
+                if (hideWheel) backgroundEvent.type = EventType.Ignore;
+                try
+                {
+                    using (new EditorGUI.DisabledScope(blockBackground))
+                    {
+                        EditorGUILayout.Space(2);
+                        DrawTitleOverlay();
+                        DrawCurveEditor();
+                        EditorGUILayout.Space(4);
+                        DrawParams();
+                        EditorGUILayout.Space(4);
+                        DrawApplyBar();
+                        EditorGUILayout.Space(8);
+                        DrawPresets();
+                        EditorGUILayout.Space(4);
+                        if (_toolsHost != null) _toolsHost.DrawToolbar(MakeHoverStyle(GUI.skin.button), L);
+                    }
+                }
+                finally { if (hideWheel) backgroundEvent.type = EventType.ScrollWheel; }
 
-            EditorGUILayout.Space(2);
-            // Draw LOGO behind curve (so control handles appear on top)
-            DrawTitleOverlay();
-            DrawCurveEditor();
-            EditorGUILayout.Space(4);
-            DrawParams();
-            EditorGUILayout.Space(4);
-            DrawApplyBar();
-            EditorGUILayout.Space(8);
-            DrawPresets();
+                GUILayout.FlexibleSpace();
+                DrawSettingsFooter();
+            }
+            finally { EditorGUILayout.EndVertical(); }
 
-            // Push settings bar to the bottom
-            GUILayout.FlexibleSpace();
-            DrawSettingsFooter();
-
-            EditorGUILayout.EndVertical();
+            if (_toolsHost != null)
+            {
+                EnsureTexCache();
+                GUIStyle button = MakeHoverStyle(GUI.skin.button);
+                GUIStyle selected = new GUIStyle(button);
+                selected.normal.background = _texTabActive;
+                selected.onNormal.background = _texTabActive;
+                selected.normal.textColor = new Color(0.12f, 0.10f, 0.05f);
+                selected.onNormal.textColor = selected.normal.textColor;
+                _toolsHost.DrawPanel(new Rect(0f, 56f, position.width, Mathf.Max(1f, position.height - 92f)),
+                    button, selected, MakeApplyStyle(), L);
+            }
         }
 
         private void DrawTitle()
@@ -443,6 +474,12 @@ namespace URflow
         private void HandleMouse(Rect ir)
         {
             _dragControlId = GUIUtility.GetControlID(FocusType.Passive);
+            if (!GUI.enabled)
+            {
+                _dragging = 0;
+                if (GUIUtility.hotControl == _dragControlId) GUIUtility.hotControl = 0;
+                return;
+            }
             Event e = Event.current;
             Vector2 p1s = N2R(_x1, _y1, ir);
             Vector2 p2s = N2R(_x2, _y2, ir);
@@ -580,22 +617,7 @@ namespace URflow
             GUILayout.Space(4);
 
             // Apply button (blue, Flow-style)
-            EnsureTexCache();
-            GUIStyle applyBtn = new GUIStyle(GUI.skin.button);
-            applyBtn.fontSize = 14;
-            applyBtn.fontStyle = FontStyle.Bold;
-            applyBtn.fixedHeight = 30;
-            applyBtn.normal.background = _texApplyNormal;
-            applyBtn.hover.background = _texApplyHover;
-            applyBtn.active.background = _texApplyActive;
-            applyBtn.focused.background = _texApplyNormal;
-            applyBtn.onNormal.background = _texApplyNormal;
-            applyBtn.onHover.background = _texApplyHover;
-            applyBtn.onActive.background = _texApplyActive;
-            applyBtn.onFocused.background = _texApplyNormal;
-            applyBtn.border = new RectOffset(1, 1, 1, 1);
-            applyBtn.normal.textColor = new Color(0.95f, 0.95f, 0.95f);
-            applyBtn.hover.textColor = new Color(1.00f, 1.00f, 1.00f);
+            GUIStyle applyBtn = MakeApplyStyle();
 
             if (GUILayout.Button(new GUIContent("APPLY", L("Apply curve to keyframes", "曲线应用关键帧")), applyBtn, GUILayout.ExpandWidth(true)))
                 URflowApplyHelper.ApplyToAnimationWindow(_x1, _y1, _x2, _y2, 0);
@@ -840,7 +862,7 @@ namespace URflow
             GUILayout.Space(8);
             EditorGUILayout.EndHorizontal();
 
-            if (e.type == EventType.MouseDown && e.button == 0 && r.Contains(e.mousePosition))
+            if (GUI.enabled && e.type == EventType.MouseDown && e.button == 0 && r.Contains(e.mousePosition))
             {
                 _selectedPresetIndex = idx;
                 _x1 = p.x1; _y1 = p.y1; _x2 = p.x2; _y2 = p.y2;
@@ -848,7 +870,7 @@ namespace URflow
                 e.Use();
                 Repaint();
             }
-            if (e.type == EventType.MouseDown && e.clickCount == 2 && r.Contains(e.mousePosition))
+            if (GUI.enabled && e.type == EventType.MouseDown && e.clickCount == 2 && r.Contains(e.mousePosition))
             {
                 URflowApplyHelper.ApplyToAnimationWindow(_x1, _y1, _x2, _y2, 0);
                 e.Use();
@@ -907,7 +929,7 @@ namespace URflow
                 GUI.Label(nameRect, p.name, nameStyle);
 
                 // Click to select
-                if (e.type == EventType.MouseDown && e.button == 0 && cellRect.Contains(e.mousePosition))
+                if (GUI.enabled && e.type == EventType.MouseDown && e.button == 0 && cellRect.Contains(e.mousePosition))
                 {
                     _selectedPresetIndex = i;
                     _x1 = p.x1; _y1 = p.y1; _x2 = p.x2; _y2 = p.y2;
@@ -916,7 +938,7 @@ namespace URflow
                     Repaint();
                 }
                 // Double-click to apply
-                if (e.type == EventType.MouseDown && e.clickCount == 2 && cellRect.Contains(e.mousePosition))
+                if (GUI.enabled && e.type == EventType.MouseDown && e.clickCount == 2 && cellRect.Contains(e.mousePosition))
                 {
                     URflowApplyHelper.ApplyToAnimationWindow(_x1, _y1, _x2, _y2, 0);
                     e.Use();
@@ -1277,6 +1299,28 @@ namespace URflow
         }
 
         // ═══════ Helpers ═══════
+
+        // Shared with tool panels so their primary action matches the existing APPLY button.
+        private static GUIStyle MakeApplyStyle()
+        {
+            EnsureTexCache();
+            GUIStyle style = new GUIStyle(GUI.skin.button);
+            style.fontSize = 14;
+            style.fontStyle = FontStyle.Bold;
+            style.fixedHeight = 30;
+            style.normal.background = _texApplyNormal;
+            style.hover.background = _texApplyHover;
+            style.active.background = _texApplyActive;
+            style.focused.background = _texApplyNormal;
+            style.onNormal.background = _texApplyNormal;
+            style.onHover.background = _texApplyHover;
+            style.onActive.background = _texApplyActive;
+            style.onFocused.background = _texApplyNormal;
+            style.border = new RectOffset(1, 1, 1, 1);
+            style.normal.textColor = new Color(0.95f, 0.95f, 0.95f);
+            style.hover.textColor = new Color(1f, 1f, 1f);
+            return style;
+        }
 
         /// <summary>
         /// Draw a small red notification dot at the given center position.
