@@ -1,0 +1,68 @@
+[2026-10-29 16:29:28] [info]UI key interaction actual dimensions: requested=320x560 actual=320x554 window.position=(x:100.00, y:106.00, width:320.00, height:554.00) window.minSize=(320.00, 560.00) window.maxSize=(4000.00, 4000.00) parent.position=(x:0.00, y:0.00, width:320.00, height:575.00) parent.screenPosition=(x:100.00, y:106.00, width:320.00, height:575.00) parent.borderSize=RectOffset (l:0 r:0 t:21 b:0) parent.minSize=(320.00, 581.00) parent.maxSize=(4000.00, 4021.00) container.position=(x:100.00, y:106.00, width:320.00, height:575.00)
+[2026-10-29 16:29:28] [info]UI actual owned layout cache source=OwnedIMGUIContainer(Dockarea8).m_Cache id=-1 topLevelCount=0 rects= windowsCount=2 rects= (x:0.00, y:0.00, width:320.00, height:554.00) (x:0.00, y:0.00, width:320.00, height:462.00)
+[2026-10-29 16:29:28] [info]UI actual owned layout cache source=OwnedIMGUIContainer(Dockarea8).m_Cache id=-1 topLevelCount=0 rects= windowsCount=2 rects= (x:0.00, y:0.00, width:320.00, height:554.00) (x:0.00, y:0.00, width:320.00, height:462.00)
+[2026-10-29 16:29:28] [info]UI legacy scroll actual cache source=OwnedIMGUIContainerFullWindowArea area=(x:0.00, y:0.00, width:320.00, height:554.00)
+[2026-10-29 16:29:28] [info]UI actual owned layout cache source=OwnedIMGUIContainer(Dockarea8).m_Cache id=-1 topLevelCount=0 rects= windowsCount=2 rects= (x:0.00, y:0.00, width:320.00, height:554.00) (x:0.00, y:0.00, width:320.00, height:462.00)
+[2026-10-29 16:29:28] [info]UI panel scroll width cache rect=(x:0.00, y:42.00, width:320.00, height:380.00) clientWidth=307 calculatedMinWidth= minWidth=277
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:114.00, y:120.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:173.00, y:120.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:232.00, y:120.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:114.00, y:139.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:173.00, y:139.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:232.00, y:139.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:114.00, y:209.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:173.00, y:209.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:232.00, y:209.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:114.00, y:319.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:173.00, y:319.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:232.00, y:319.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:114.00, y:429.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:173.00, y:429.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:232.00, y:429.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:114.00, y:499.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:173.00, y:499.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:232.00, y:499.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:114.00, y:569.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:173.00, y:569.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:232.00, y:569.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI key wheel panelViewport=(x:0.00, y:119.00, width:320.00, height:380.00) legacyViewport=(x:0.00, y:457.00, width:320.00, height:32.00) intersection=(x:0.00, y:457.00, width:320.00, height:32.00) legacy=(0.00, 0.00) -> (0.00, 0.00) panel=(0.00, 0.00) -> (0.00, 100.00)
+[2026-10-29 16:29:28] [info]PASS UI: requested=320x560 actual=320x554 ScrollWheel routes to the panel while preserving background scroll
+[2026-10-29 16:29:28] [info]UI actual owned layout cache source=OwnedIMGUIContainer(Dockarea8).m_Cache id=-1 topLevelCount=0 rects= windowsCount=2 rects= (x:0.00, y:0.00, width:320.00, height:554.00) (x:0.00, y:0.00, width:320.00, height:462.00)
+[2026-10-29 16:29:28] [info]UI close actual cached rect=(x:275.00, y:87.00, width:26.00, height:24.00) HostViewOffset=(0.00, 21.00) GUI.enabled=True hotControl=0 faded=1 target=True panelError=
+[2026-10-29 16:29:28] [info]PASS UI: requested=320x560 actual=320x554 actual cached close button closes the panel
+[2026-10-29 16:29:28] [info]PASS UI: requested=320x560 actual=320x554 Escape closes the panel
+[2026-10-29 16:29:28] [info]UI key interaction actual dimensions: requested=480x720 actual=480x720 window.position=(x:100.00, y:100.00, width:480.00, height:720.00) window.minSize=(320.00, 560.00) window.maxSize=(4000.00, 4000.00) parent.position=(x:0.00, y:0.00, width:480.00, height:741.00) parent.screenPosition=(x:100.00, y:100.00, width:480.00, height:741.00) parent.borderSize=RectOffset (l:0 r:0 t:21 b:0) parent.minSize=(320.00, 581.00) parent.maxSize=(4000.00, 4021.00) container.position=(x:100.00, y:100.00, width:480.00, height:741.00)
+[2026-10-29 16:29:28] [info]UI actual owned layout cache source=OwnedIMGUIContainer(Dockarea9).m_Cache id=-1 topLevelCount=0 rects= windowsCount=2 rects= (x:0.00, y:0.00, width:480.00, height:720.00) (x:0.00, y:0.00, width:480.00, height:628.00)
+[2026-10-29 16:29:28] [info]UI actual owned layout cache source=OwnedIMGUIContainer(Dockarea9).m_Cache id=-1 topLevelCount=0 rects= windowsCount=2 rects= (x:0.00, y:0.00, width:480.00, height:720.00) (x:0.00, y:0.00, width:480.00, height:628.00)
+[2026-10-29 16:29:28] [info]UI legacy scroll actual cache source=OwnedIMGUIContainerFullWindowArea area=(x:0.00, y:0.00, width:480.00, height:720.00)
+[2026-10-29 16:29:28] [info]UI actual owned layout cache source=OwnedIMGUIContainer(Dockarea9).m_Cache id=-1 topLevelCount=0 rects= windowsCount=2 rects= (x:0.00, y:0.00, width:480.00, height:720.00) (x:0.00, y:0.00, width:480.00, height:628.00)
+[2026-10-29 16:29:28] [info]UI panel scroll width cache rect=(x:0.00, y:42.00, width:480.00, height:546.00) clientWidth=467 calculatedMinWidth= minWidth=277
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:274.00, y:120.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:333.00, y:120.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:392.00, y:120.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:274.00, y:139.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:333.00, y:139.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:392.00, y:139.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:274.00, y:196.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:333.00, y:196.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:392.00, y:196.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:274.00, y:293.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:333.00, y:293.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:392.00, y:293.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:274.00, y:390.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:333.00, y:390.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:392.00, y:390.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:274.00, y:447.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:333.00, y:447.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:392.00, y:447.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:274.00, y:504.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:333.00, y:504.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI numeric column cached rect=(x:392.00, y:504.00, width:56.00, height:14.00)
+[2026-10-29 16:29:28] [info]UI key wheel panelViewport=(x:0.00, y:119.00, width:480.00, height:546.00) legacyViewport=(x:0.00, y:457.00, width:480.00, height:197.00) intersection=(x:0.00, y:457.00, width:480.00, height:197.00) legacy=(0.00, 0.00) -> (0.00, 0.00) panel=(0.00, 0.00) -> (0.00, 82.00)
+[2026-10-29 16:29:28] [info]PASS UI: requested=480x720 actual=480x720 ScrollWheel routes to the panel while preserving background scroll
+[2026-10-29 16:29:28] [info]UI actual owned layout cache source=OwnedIMGUIContainer(Dockarea9).m_Cache id=-1 topLevelCount=0 rects= windowsCount=2 rects= (x:0.00, y:0.00, width:480.00, height:720.00) (x:0.00, y:0.00, width:480.00, height:628.00)
+[2026-10-29 16:29:28] [info]UI close actual cached rect=(x:435.00, y:87.00, width:26.00, height:24.00) HostViewOffset=(0.00, 21.00) GUI.enabled=True hotControl=0 faded=1 target=True panelError=
+[2026-10-29 16:29:28] [info]PASS UI: requested=480x720 actual=480x720 actual cached close button closes the panel
+[2026-10-29 16:29:28] [info]PASS UI: requested=480x720 actual=480x720 Escape closes the panel
+[2026-10-29 16:29:28] [info]KeyInteractionChecks=6 PASS
+[2026-10-29 16:29:28] [info]URFLOW_UI_PROBE_EXIT 0 captures=0

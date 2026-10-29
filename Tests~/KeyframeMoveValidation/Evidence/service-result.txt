@@ -1,0 +1,22 @@
+Unity=2022.3.56f1
+ServiceChecks=19
+Result=PASS
+PASS: single selected key creates read-only preview of whole property
+PASS: translation changes entire selected curve and preserves other axes
+PASS: last anchor proportional conversion and complete curve write
+PASS: single Undo and Redo restore the complete selected property
+PASS: changed static target rejects stale preview
+PASS: changed source curve rejects stale preview
+PASS: changed property selection rejects stale preview
+PASS: changed animation root rejects stale preview
+PASS: no property selection is rejected
+PASS: mixed supported and unsupported properties are rejected atomically
+PASS: already aligned application is a no-op
+PASS: existing READ/APPLY and CurveGuard retain normalized curve behavior
+PASS: hierarchy rows and key selections cannot silently expand target properties
+PASS: sampled preview reads static values and restores time without recording
+PASS: RectTransform anchored axes and scale use actual static values
+PASS: native driven RectTransform axis is rejected without writing
+PASS: constant tangent curve writes and survives guard ticks and Undo/Redo
+PASS: failed stale apply closes recording and retains the notice without writing
+PASS: post-write verification failure rolls back every property atomically

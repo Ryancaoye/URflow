@@ -1,0 +1,10 @@
+KeyInteractionChecks=6 PASS
+SendEventCount=54
+NativeSizeMode=OBSERVED_ACTUAL
+RequestedSizes=320x560,480x720
+ObservedSizes=requested=320x560 actual=320x554,requested=480x720 actual=480x720
+Coverage=scrollwheel,close,escape
+OpeningFixture=DirectAnimBoolAndReadOnlyPreviewSeed
+VisualPixelQA=NOT_PERFORMED
+CapturedCheckpointCount=0
+CapturedImagesRequireVisualInspection=YES
