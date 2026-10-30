@@ -2,6 +2,20 @@
 
 All notable changes to URflow will be documented in this file.
 
+## [Unreleased]
+
+### v1.0.4 development — not released
+
+- 2026-10-29 — Implement Keyframe Move in the development worktree: align selected position/scale curves at their first or last key to the static layout value, using translation or proportional scaling; support Undo/Redo and reject invalid zero baselines.
+- 2026-10-29 — Isolate the tool host, panel, curve math and Unity adapter; retain the independent branch/worktree and staged validation workflow.
+- 2026-10-30 — Remove the unused plugin field that becomes CS0414 under warnings-as-errors. Strict compiler checks pass; the user confirmed normal project startup.
+- 2026-10-30 — Integrate the approved visuals into the v1.0.4 development package: preserve the original logo/icons; use a compact dark layout, a 260 px graph that adapts to short windows, a saturated green/cyan/blue 1.8 px curve with a soft halo, same-row XY fields and the four-value paste field, amber preset underlines and a 15 px bold white APPLY label.
+- 2026-10-30 — Use an 84 px tool strip with one 44×44 px Keyframe Move icon and a bottom panel with a preferred height of 420 px. The panel opens in 400 ms; one edge sweep lasts 1900 ms. Overflow supports mouse drag and wheel scrolling; no timing parameters or animation-settings entry are exposed.
+- 2026-10-30 — Require a dated change record for every completed feature, fix, visual, wording, documentation or workflow stage; synchronize the tutorial's final update-history section, Markdown, Word and generator.
+- Validation — Strict compilation of 15 source files passes with warning level 4 and warnings as errors, without diagnostics. Unity 2022.3.56f1 confirms the staged package path; 19 math checks, 19 service checks and 27 native UI event checks pass. The UI run uses 336 SendEvent calls at actual 320×820, 320×560 and 480×720 sizes under D3D11, without GUI/GUILayout errors. Pixel appearance checks were not executed because the screenshot API was unavailable and desktop helpers failed to start in the sandbox. Strict compilation passed again after the amber-underline adjustment.
+- References — Existing development commits include 9f560f8 (curve math), 1e7c2da (Unity service), ef39a3c (tool panel), 7b74d54 (strict compilation) and f8cd7eb (user startup confirmation). Visual integration is saved as 32a6bd6 on feature/v1.0.4 and synchronized to the D: development package; all 15 source hashes match the final strict-compile inputs. Documentation and workflow records are saved with the accompanying documentation commit; see Git history.
+- Pending — Complete visual acceptance, production Unity refresh and production-scene trial before release. No production project file was manually changed; its latest log has not yet confirmed a reload. Version fields remain 1.0.3; target v1.0.4 is not released and no release archive or tag has been generated.
+
 ## [1.0.3] - 2026-09-03
 
 > Code changes in this release landed between 2026-04-16 and 2026-04-22 but were
