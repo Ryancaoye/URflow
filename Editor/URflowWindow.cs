@@ -27,18 +27,15 @@ namespace URflow
         private URflowToolsHost _toolsHost;
 
         // ── Layout ──
-        private const float CurveH = 220f;
         private const float Radius = 7f;
         private const float Pad = 16f;
+        private Rect _curveInnerRect;
+        private double _edgeStarted = -1d;
 
         // ── Colors (Flow-inspired Theme) ──
-        private static readonly Color BgCol = new Color(0.16f, 0.16f, 0.16f);
         private static readonly Color GridCol = new Color(0.22f, 0.22f, 0.22f);
         private static readonly Color CurveCol = new Color(0.95f, 0.95f, 0.95f);
-        // Curve gradient: start color → end color
-        private static readonly Color CurveGradA = new Color(0.37f, 0.94f, 0.69f);
-        private static readonly Color CurveGradB = new Color(0.00f, 0.44f, 1.00f);
-        private static readonly Color HandleCol = new Color(0.90f, 0.70f, 0.20f, 0.9f);
+        private static readonly Color HandleCol = new Color(1.00f, 0.72f, 0.15f, 0.55f);
         private static readonly Color P1Col = new Color(1.00f, 0.72f, 0.15f);
         private static readonly Color P2Col = new Color(1.00f, 0.72f, 0.15f);
         private static readonly Color DiagCol = new Color(0.22f, 0.22f, 0.22f);
@@ -47,35 +44,7 @@ namespace URflow
         private static readonly Color PSel = new Color(0.28f, 0.28f, 0.30f);
         private static readonly Color FavCol = new Color(1.00f, 0.80f, 0.15f);
 
-        // Button hover accent
-        private static readonly Color BtnHoverBg = new Color(0.28f, 0.28f, 0.30f);
-
         private static Material _mat;
-
-        // ── Cached Textures (created once, reused every OnGUI) ──
-        private static Texture2D _texBtnNormal;
-        private static Texture2D _texBtnHover;
-        private static Texture2D _texBtnActive;
-        private static Texture2D _texApplyNormal;
-        private static Texture2D _texApplyHover;
-        private static Texture2D _texApplyActive;
-        private static Texture2D _texLangSel;
-        private static Texture2D _texTabActive;
-        private static bool _texCacheReady = false;
-
-        private static void EnsureTexCache()
-        {
-            if (_texCacheReady && _texBtnNormal != null) return;
-            _texBtnNormal = MakeTex(2, 2, new Color(0.20f, 0.20f, 0.20f));
-            _texBtnHover = MakeTex(2, 2, new Color(0.28f, 0.28f, 0.30f));
-            _texBtnActive = MakeTex(2, 2, new Color(0.32f, 0.32f, 0.35f));
-            _texApplyNormal = MakeGradientTex(128, 2, CurveGradA, CurveGradB, 1.0f);
-            _texApplyHover = MakeGradientTex(128, 2, CurveGradA, CurveGradB, 1.2f);
-            _texApplyActive = MakeGradientTex(128, 2, CurveGradA, CurveGradB, 0.8f);
-            _texLangSel = MakeTex(2, 2, new Color(0.24f, 0.28f, 0.26f));
-            _texTabActive = MakeTex(2, 2, new Color(1.00f, 0.722f, 0.149f));
-            _texCacheReady = true;
-        }
 
         // ── Logo ──
         private Texture2D _logoTex;
@@ -128,6 +97,9 @@ namespace URflow
         {
             if (_toolsHost != null) _toolsHost.Dispose();
             _toolsHost = null;
+            URflowVisuals.Dispose();
+            if (_mat != null) DestroyImmediate(_mat);
+            _mat = null;
         }
 
         private void OnFocus()
@@ -151,7 +123,7 @@ namespace URflow
             // No need to block events here - GUI.ModalWindow handles it
 
             EditorGUI.DrawRect(new Rect(0, 0, position.width, position.height),
-                new Color(0.14f, 0.14f, 0.14f));
+                URflowVisuals.Background);
 
             if (_showSettings)
             {
@@ -168,6 +140,8 @@ namespace URflow
             }
 
             DrawMainContent();
+            if (URflowVisuals.DrawEdgeSweep(new Rect(1f, 1f, position.width - 2f, position.height - 2f), _edgeStarted))
+                Repaint();
         }
 
         private void DrawMainContent()
@@ -181,8 +155,10 @@ namespace URflow
                 bool hideWheel = blockBackground && backgroundEvent.type == EventType.ScrollWheel;
                 // IMGUI scroll views handle wheel events even when GUI.enabled is false.
                 if (hideWheel) backgroundEvent.type = EventType.Ignore;
+                Color backgroundColor = GUI.color;
                 try
                 {
+                    if (blockBackground) GUI.color *= new Color(0.55f, 0.55f, 0.55f, 1f);
                     using (new EditorGUI.DisabledScope(blockBackground))
                     {
                         EditorGUILayout.Space(2);
@@ -198,7 +174,11 @@ namespace URflow
                         if (_toolsHost != null) _toolsHost.DrawToolbar(MakeHoverStyle(GUI.skin.button), L);
                     }
                 }
-                finally { if (hideWheel) backgroundEvent.type = EventType.ScrollWheel; }
+                finally
+                {
+                    GUI.color = backgroundColor;
+                    if (hideWheel) backgroundEvent.type = EventType.ScrollWheel;
+                }
 
                 GUILayout.FlexibleSpace();
                 DrawSettingsFooter();
@@ -207,14 +187,10 @@ namespace URflow
 
             if (_toolsHost != null)
             {
-                EnsureTexCache();
                 GUIStyle button = MakeHoverStyle(GUI.skin.button);
                 GUIStyle selected = new GUIStyle(button);
-                selected.normal.background = _texTabActive;
-                selected.onNormal.background = _texTabActive;
-                selected.normal.textColor = new Color(0.12f, 0.10f, 0.05f);
-                selected.onNormal.textColor = selected.normal.textColor;
-                _toolsHost.DrawPanel(new Rect(0f, 56f, position.width, Mathf.Max(1f, position.height - 92f)),
+                URflowVisuals.StyleSelectedButton(selected);
+                _toolsHost.DrawPanel(new Rect(12f, 50f, position.width - 24f, Mathf.Max(1f, position.height - 86f)),
                     button, selected, MakeApplyStyle(), L);
             }
         }
@@ -284,11 +260,11 @@ namespace URflow
             }
             if (_logoTex == null) return;
 
-            float logoHeight = 40f;
+            float logoHeight = 31f;
             float aspect = (float)_logoTex.width / _logoTex.height;
             float logoWidth = logoHeight * aspect;
             float x = (position.width - logoWidth) / 2f;
-            float y = 14f; // top margin (adjusted downward)
+            float y = 10f;
             Rect drawRect = new Rect(x, y, logoWidth, logoHeight);
             GUI.DrawTexture(drawRect, _logoTex, ScaleMode.ScaleToFit);
         }
@@ -299,20 +275,21 @@ namespace URflow
         {
             // Reserve extra space above and below for overflow drawing
             float overflow = 60f;
-            float overflowTop = overflow;
+            float overflowTop = 48f;
             float overflowBot = 10f;
             GUILayout.Space(overflowTop);
-            Rect cr = GUILayoutUtility.GetRect(position.width - Pad * 2, CurveH);
+            float curveHeight = Mathf.Clamp(position.height - (_filter == 2 ? 480f : 450f), 120f, 260f);
+            Rect cr = GUILayoutUtility.GetRect(position.width - Pad * 2, curveHeight);
             cr.x += Pad;
             cr.width -= Pad * 2;
             GUILayout.Space(overflowBot);
 
             // Only draw the dark background for the actual curve box
-            EditorGUI.DrawRect(cr, BgCol);
-            DrawBorder(cr, new Color(0.25f, 0.25f, 0.25f));
+            URflowVisuals.DrawSurface(cr, URflowVisuals.GraphBackground, new Color(0.23f, 0.23f, 0.23f));
 
             float m = 20f;
             Rect ir = new Rect(cr.x + m, cr.y + m, cr.width - m * 2, cr.height - m * 2);
+            _curveInnerRect = ir;
 
             if (Event.current.type == EventType.Repaint)
             {
@@ -344,7 +321,7 @@ namespace URflow
             }
 
             if (!_showSaveDialog)
-                HandleMouse(ir);
+                HandleMouse(_curveInnerRect);
         }
 
         private void DrawGrid(Rect r)
@@ -357,7 +334,7 @@ namespace URflow
             EnsureMat();
             _mat.SetPass(0);
             GL.Begin(GL.LINES);
-            GL.Color(GridCol);
+            GL.Color(GridCol * GUI.color);
             for (int i = 0; i <= 4; i++)
             {
                 float t = (float)i / 4f;
@@ -379,7 +356,7 @@ namespace URflow
             EnsureMat();
             _mat.SetPass(0);
             GL.Begin(GL.LINES);
-            GL.Color(DiagCol);
+            GL.Color(DiagCol * GUI.color);
             GL.Vertex3(r.x, r.yMax, 0);
             GL.Vertex3(r.xMax, r.y, 0);
             GL.End();
@@ -393,62 +370,24 @@ namespace URflow
             Vector2 p2 = N2R(_x2, _y2, r);
             EnsureMat();
             _mat.SetPass(0);
-            // Draw thick handle lines (2px width via offset passes)
-            for (int off = -1; off <= 1; off++)
-            {
-                GL.Begin(GL.LINES);
-                GL.Color(HandleCol);
-                GL.Vertex3(p0.x + off, p0.y, 0);
-                GL.Vertex3(p1.x + off, p1.y, 0);
-                GL.Vertex3(p0.x, p0.y + off, 0);
-                GL.Vertex3(p1.x, p1.y + off, 0);
-                GL.Vertex3(p3.x + off, p3.y, 0);
-                GL.Vertex3(p2.x + off, p2.y, 0);
-                GL.Vertex3(p3.x, p3.y + off, 0);
-                GL.Vertex3(p2.x, p2.y + off, 0);
-                GL.End();
-            }
+            GL.Begin(GL.LINES);
+            GL.Color(HandleCol * GUI.color);
+            GL.Vertex3(p0.x, p0.y, 0);
+            GL.Vertex3(p1.x, p1.y, 0);
+            GL.Vertex3(p3.x, p3.y, 0);
+            GL.Vertex3(p2.x, p2.y, 0);
+            GL.End();
         }
 
         private void DrawCurveLine(Rect r)
         {
-            EnsureMat();
-            _mat.SetPass(0);
-            int segments = 64;
-            // Draw thick gradient curve (3px width via offset passes)
-            float[] offX = { 0f, -1f, 1f, 0f, 0f };
-            float[] offY = { 0f, 0f, 0f, -1f, 1f };
-            for (int p = 0; p < offX.Length; p++)
-            {
-                GL.Begin(GL.LINES);
-                float prevX = 0f, prevY = 0f;
-                Color prevCol = CurveGradA;
-                for (int i = 0; i <= segments; i++)
-                {
-                    float t = (float)i / segments;
-                    float v = CubicBezierConverter.Evaluate(_x1, _y1, _x2, _y2, t);
-                    float px = Mathf.LerpUnclamped(r.x, r.xMax, t) + offX[p];
-                    float py = Mathf.LerpUnclamped(r.yMax, r.y, v) + offY[p];
-                    Color col = Color.Lerp(CurveGradA, CurveGradB, t);
-                    if (i > 0)
-                    {
-                        GL.Color(prevCol);
-                        GL.Vertex3(prevX, prevY, 0);
-                        GL.Color(col);
-                        GL.Vertex3(px, py, 0);
-                    }
-                    prevX = px;
-                    prevY = py;
-                    prevCol = col;
-                }
-                GL.End();
-            }
+            URflowVisuals.DrawCurve(r, _x1, _y1, _x2, _y2);
         }
 
         private void DrawControlPoints(Rect r)
         {
-            DrawCircle(N2R(_x1, _y1, r), Radius, P1Col);
-            DrawCircle(N2R(_x2, _y2, r), Radius, P2Col);
+            DrawCircle(N2R(_x1, _y1, r), 4.5f, P1Col);
+            DrawCircle(N2R(_x2, _y2, r), 4.5f, P2Col);
         }
 
         private void DrawCircle(Vector2 center, float rad, Color col)
@@ -456,7 +395,7 @@ namespace URflow
             EnsureMat();
             _mat.SetPass(0);
             GL.Begin(GL.TRIANGLES);
-            GL.Color(col);
+            GL.Color(col * GUI.color);
             int segs = 24;
             for (int i = 0; i < segs; i++)
             {
@@ -545,13 +484,15 @@ namespace URflow
             inp.alignment = TextAnchor.MiddleCenter;
             inp.fontSize = 12;
             inp.fontStyle = FontStyle.Bold;
-            _paramInput = EditorGUILayout.TextField(_paramInput, inp);
+            URflowVisuals.StyleButton(inp);
+            inp.padding = new RectOffset(7, 7, 3, 3);
+            _paramInput = EditorGUILayout.TextField(_paramInput, inp, GUILayout.Height(24));
             if (EditorGUI.EndChangeCheck()) ParseParam();
 
             GUILayout.Space(Pad);
             EditorGUILayout.EndHorizontal();
 
-            EditorGUILayout.Space(8);
+            EditorGUILayout.Space(6);
 
             EditorGUILayout.BeginHorizontal();
             GUILayout.Space(Pad);
@@ -596,7 +537,7 @@ namespace URflow
             GUIStyle sideBtn = new GUIStyle(GUI.skin.button);
             sideBtn.fontSize = 12;
             sideBtn.fontStyle = FontStyle.Bold;
-            sideBtn.fixedHeight = 30;
+            sideBtn.fixedHeight = 34;
             sideBtn.fixedWidth = 36;
             sideBtn.padding = new RectOffset(7, 7, 7, 7);
             sideBtn = MakeHoverStyle(sideBtn);
@@ -619,7 +560,11 @@ namespace URflow
             GUIStyle applyBtn = MakeApplyStyle();
 
             if (GUILayout.Button(new GUIContent("APPLY", L("Apply curve to keyframes", "曲线应用关键帧")), applyBtn, GUILayout.ExpandWidth(true)))
+            {
                 URflowApplyHelper.ApplyToAnimationWindow(_x1, _y1, _x2, _y2, 0);
+                _edgeStarted = EditorApplication.timeSinceStartup;
+                Repaint();
+            }
 
             GUILayout.Space(4);
 
@@ -648,24 +593,21 @@ namespace URflow
 
         private void DrawPresets()
         {
+            Rect card = EditorGUILayout.BeginVertical(GUILayout.ExpandHeight(true));
+            URflowVisuals.DrawSurface(new Rect(12f, card.y, position.width - 24f, card.height),
+                URflowVisuals.PresetBackground, Color.clear);
+            EditorGUILayout.Space(5);
             EditorGUILayout.BeginHorizontal();
             GUILayout.Space(Pad);
-            GUIStyle tb = new GUIStyle(EditorStyles.toolbarButton);
+            GUIStyle tb = new GUIStyle(EditorStyles.label);
             tb.fontSize = 11;
             tb.fontStyle = FontStyle.Bold;
-            tb = MakeHoverStyle(tb);
-
-            // Active tab style: yellow/orange for selected tab
-            EnsureTexCache();
-            GUIStyle tbActive = new GUIStyle(tb);
-            tbActive.normal.background = _texTabActive;
-            tbActive.onNormal.background = _texTabActive;
-            tbActive.normal.textColor = new Color(0.12f, 0.10f, 0.05f);
-            tbActive.onNormal.textColor = new Color(0.12f, 0.10f, 0.05f);
-
-            if (GUILayout.Toggle(_filter == 0, new GUIContent("ALL", L("Show all presets", "显示全部预设")), _filter == 0 ? tbActive : tb)) _filter = 0;
-            if (GUILayout.Toggle(_filter == 1, new GUIContent("FAVORITES", L("Show favorites only", "仅显示收藏的预设")), _filter == 1 ? tbActive : tb)) _filter = 1;
-            if (GUILayout.Toggle(_filter == 2, new GUIContent("MY PRESETS", L("Show custom saved presets", "显示自定义保存的预设")), _filter == 2 ? tbActive : tb)) _filter = 2;
+            tb.alignment = TextAnchor.MiddleCenter;
+            tb.fixedHeight = 27f;
+            tb.margin = new RectOffset(0, 0, 0, 0);
+            DrawPresetTab(0, "ALL", L("Show all presets", "显示全部预设"), tb);
+            DrawPresetTab(1, "FAVORITES", L("Show favorites only", "仅显示收藏的预设"), tb);
+            DrawPresetTab(2, "MY PRESETS", L("Show custom saved presets", "显示自定义保存的预设"), tb);
             GUILayout.Space(Pad);
             EditorGUILayout.EndHorizontal();
             EditorGUILayout.Space(2);
@@ -743,6 +685,14 @@ namespace URflow
             EditorGUILayout.BeginHorizontal();
             GUILayout.Space(Pad);
             _searchQuery = EditorGUILayout.TextField(_searchQuery, EditorStyles.toolbarSearchField);
+            Rect searchRect = GUILayoutUtility.GetLastRect();
+            if (string.IsNullOrEmpty(_searchQuery) && Event.current.type == EventType.Repaint)
+            {
+                GUIStyle placeholder = new GUIStyle(EditorStyles.miniLabel);
+                placeholder.normal.textColor = new Color(0.52f, 0.52f, 0.52f);
+                GUI.Label(new Rect(searchRect.x + 18f, searchRect.y, searchRect.width - 36f, searchRect.height),
+                    L("Search presets...", "搜索预设..."), placeholder);
+            }
 
             GUILayout.Space(4);
             GUIStyle viewBtn = new GUIStyle(EditorStyles.toolbarButton);
@@ -780,6 +730,26 @@ namespace URflow
                 GUILayout.Label(L("No presets found.", "未找到预设。"), emptyStyle);
             }
             EditorGUILayout.EndScrollView();
+            EditorGUILayout.Space(4);
+            EditorGUILayout.EndVertical();
+        }
+
+        private void DrawPresetTab(int index, string label, string tooltip, GUIStyle baseStyle)
+        {
+            GUIStyle style = new GUIStyle(baseStyle);
+            Color color = _filter == index ? URflowVisuals.Amber : new Color(0.59f, 0.59f, 0.59f);
+            style.normal.textColor = color;
+            style.hover.textColor = _filter == index ? color : Color.white;
+            style.active.textColor = URflowVisuals.Amber;
+            if (GUILayout.Button(new GUIContent(label, tooltip), style, GUILayout.ExpandWidth(true)))
+            {
+                _filter = index;
+                Repaint();
+            }
+            Rect rect = GUILayoutUtility.GetLastRect();
+            if (_filter == index && Event.current.type == EventType.Repaint)
+                EditorGUI.DrawRect(new Rect(rect.x + 8f, rect.yMax - 2f, rect.width - 16f, 1.5f),
+                    URflowVisuals.Amber);
         }
 
         private void DrawCategories()
@@ -822,9 +792,10 @@ namespace URflow
             Rect r = EditorGUILayout.BeginHorizontal(GUILayout.Height(28));
             bool hov = r.Contains(e.mousePosition);
             bool sel = _selectedPresetIndex == idx;
-            EditorGUI.DrawRect(r, sel ? PSel : hov ? PHover : PNorm);
+            URflowVisuals.DrawSurface(new Rect(r.x + 16f, r.y, r.width - 32f, r.height),
+                sel ? PSel : hov ? PHover : PNorm, Color.clear, 4f);
 
-            GUILayout.Space(8);
+            GUILayout.Space(20);
 
             bool fav = _favorites.Contains(p.name);
             GUIStyle starStyle = new GUIStyle(EditorStyles.miniLabel);
@@ -849,16 +820,17 @@ namespace URflow
             GUIStyle nameStyle = new GUIStyle(EditorStyles.label);
             nameStyle.fontSize = 11;
             nameStyle.normal.textColor = sel ? new Color(0.95f, 0.95f, 0.95f) : new Color(0.72f, 0.72f, 0.72f);
-            GUILayout.Label(p.name, nameStyle);
+            nameStyle.clipping = TextClipping.Clip;
+            GUILayout.Label(p.name, nameStyle, GUILayout.MinWidth(30f), GUILayout.ExpandWidth(true));
 
             GUILayout.FlexibleSpace();
 
             GUIStyle paramStyle = new GUIStyle(EditorStyles.miniLabel);
             paramStyle.normal.textColor = new Color(0.50f, 0.50f, 0.50f);
             paramStyle.fontSize = 9;
-            GUILayout.Label(p.ToParamString(), paramStyle);
+            GUILayout.Label(p.ToParamString(), paramStyle, GUILayout.Width(105f));
 
-            GUILayout.Space(8);
+            GUILayout.Space(20);
             EditorGUILayout.EndHorizontal();
 
             if (GUI.enabled && e.type == EventType.MouseDown && e.button == 0 && r.Contains(e.mousePosition))
@@ -907,7 +879,7 @@ namespace URflow
 
                 // Card background
                 Rect cardRect = new Rect(cellRect.x + 2, cellRect.y + 2, cellRect.width - 4, cellRect.height - 4);
-                EditorGUI.DrawRect(cardRect, sel ? cardSel : hover ? cardHov : cardBg);
+                URflowVisuals.DrawSurface(cardRect, sel ? cardSel : hover ? cardHov : cardBg, Color.clear, 4f);
 
                 // Curve preview area (square)
                 float previewSize = cardRect.width - 8;
@@ -1005,7 +977,7 @@ namespace URflow
         {
             EditorGUILayout.Space(4);
             Rect sepRect = GUILayoutUtility.GetRect(position.width, 1);
-            EditorGUI.DrawRect(sepRect, new Color(0.25f, 0.25f, 0.25f));
+            EditorGUI.DrawRect(sepRect, URflowVisuals.Divider);
             EditorGUILayout.Space(4);
 
             EditorGUILayout.BeginHorizontal(GUILayout.Height(22));
@@ -1050,8 +1022,7 @@ namespace URflow
                 (position.width - dw) / 2,
                 (position.height - dh) / 2,
                 dw, dh);
-            EditorGUI.DrawRect(dialog, new Color(0.2f, 0.2f, 0.2f));
-            DrawBorder(dialog, new Color(0.35f, 0.35f, 0.35f));
+            URflowVisuals.DrawSurface(dialog, URflowVisuals.PanelBackground, URflowVisuals.Divider);
 
             GUILayout.BeginArea(dialog);
             GUILayout.Space(14);
@@ -1096,11 +1067,8 @@ namespace URflow
             GUIStyle saveStyle = new GUIStyle(GUI.skin.button);
             saveStyle.fixedHeight = 26;
             saveStyle.fontStyle = FontStyle.Bold;
-            saveStyle.normal.background = _texApplyNormal;
-            saveStyle.hover.background = _texApplyHover;
-            saveStyle.active.background = _texApplyActive;
-            saveStyle.border = new RectOffset(1, 1, 1, 1);
-            saveStyle.normal.textColor = new Color(0.95f, 0.95f, 0.95f);
+            URflowVisuals.StyleButton(saveStyle, true);
+            saveStyle.normal.textColor = Color.white;
             saveStyle.hover.textColor = Color.white;
 
             bool enterPressed = Event.current.type == EventType.KeyDown
@@ -1131,7 +1099,6 @@ namespace URflow
 
         private void DrawSettingsPage()
         {
-            EnsureTexCache();
             float cardH = 52f;
             float cardPad = 6f;
             Color cardBg = new Color(0.20f, 0.20f, 0.20f);
@@ -1253,9 +1220,7 @@ namespace URflow
             bool hover = cardRect.Contains(e.mousePosition);
 
             // Card background
-            EditorGUI.DrawRect(cardRect, hover ? cardHover : cardBg);
-            // Card border
-            DrawBorder(cardRect, new Color(0.30f, 0.30f, 0.32f));
+            URflowVisuals.DrawSurface(cardRect, hover ? cardHover : cardBg, new Color(0.30f, 0.30f, 0.32f));
 
             // Icon
             GUIStyle iconStyle = new GUIStyle(EditorStyles.label);
@@ -1302,22 +1267,19 @@ namespace URflow
         // Shared with tool panels so their primary action matches the existing APPLY button.
         private static GUIStyle MakeApplyStyle()
         {
-            EnsureTexCache();
             GUIStyle style = new GUIStyle(GUI.skin.button);
-            style.fontSize = 14;
+            style.fontSize = 15;
             style.fontStyle = FontStyle.Bold;
-            style.fixedHeight = 30;
-            style.normal.background = _texApplyNormal;
-            style.hover.background = _texApplyHover;
-            style.active.background = _texApplyActive;
-            style.focused.background = _texApplyNormal;
-            style.onNormal.background = _texApplyNormal;
-            style.onHover.background = _texApplyHover;
-            style.onActive.background = _texApplyActive;
-            style.onFocused.background = _texApplyNormal;
-            style.border = new RectOffset(1, 1, 1, 1);
-            style.normal.textColor = new Color(0.95f, 0.95f, 0.95f);
-            style.hover.textColor = new Color(1f, 1f, 1f);
+            style.fixedHeight = 34;
+            URflowVisuals.StyleButton(style, true);
+            style.normal.textColor = Color.white;
+            style.hover.textColor = Color.white;
+            style.active.textColor = Color.white;
+            style.focused.textColor = Color.white;
+            style.onNormal.textColor = Color.white;
+            style.onHover.textColor = Color.white;
+            style.onActive.textColor = Color.white;
+            style.onFocused.textColor = Color.white;
             return style;
         }
 
@@ -1338,50 +1300,9 @@ namespace URflow
         /// </summary>
         private static GUIStyle MakeHoverStyle(GUIStyle baseStyle)
         {
-            EnsureTexCache();
             GUIStyle s = new GUIStyle(baseStyle);
-
-            s.normal.background = _texBtnNormal;
-            s.hover.background = _texBtnHover;
-            s.active.background = _texBtnActive;
-            s.focused.background = _texBtnNormal;
-            s.onNormal.background = _texBtnNormal;
-            s.onHover.background = _texBtnHover;
-            s.onActive.background = _texBtnActive;
-            s.onFocused.background = _texBtnNormal;
-
-            s.border = new RectOffset(1, 1, 1, 1);
-
+            URflowVisuals.StyleButton(s);
             return s;
-        }
-
-        private static Texture2D MakeTex(int w, int h, Color col)
-        {
-            Color[] pix = new Color[w * h];
-            for (int i = 0; i < pix.Length; i++) pix[i] = col;
-            Texture2D t = new Texture2D(w, h);
-            t.SetPixels(pix);
-            t.Apply();
-            t.hideFlags = HideFlags.HideAndDontSave;
-            return t;
-        }
-
-        private static Texture2D MakeGradientTex(int w, int h, Color left, Color right, float brightness)
-        {
-            Color[] pix = new Color[w * h];
-            for (int x = 0; x < w; x++)
-            {
-                float t = (float)x / (w - 1);
-                Color c = Color.Lerp(left, right, t) * brightness;
-                c.a = 1f;
-                for (int y = 0; y < h; y++)
-                    pix[y * w + x] = c;
-            }
-            Texture2D tex = new Texture2D(w, h);
-            tex.SetPixels(pix);
-            tex.Apply();
-            tex.hideFlags = HideFlags.HideAndDontSave;
-            return tex;
         }
 
         private List<BezierPreset> GetFiltered()

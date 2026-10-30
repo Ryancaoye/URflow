@@ -8,23 +8,57 @@ namespace URflow
     // Navigation belongs to the host; animation data belongs to the tool service.
     internal sealed class URflowToolsHost : IDisposable
     {
+        private sealed class ToolEntry
+        {
+            public readonly string English;
+            public readonly string Chinese;
+            public readonly string Icon;
+            public readonly Action Open;
+
+            public ToolEntry(string english, string chinese, string icon, Action open)
+            { English = english; Chinese = chinese; Icon = icon; Open = open; }
+        }
+
         private readonly AnimBool _open = new AnimBool(false);
         private readonly URflowKeyframeMovePanel _panel;
         private readonly Action _repaint;
+        private readonly ToolEntry[] _tools;
         private string _panelError;
+        private float _progress;
+        private float _transitionFrom;
+        private bool _transitionTarget;
+        private bool _transitioning;
+        private double _transitionStarted;
+        private double _sweepStarted = -100d;
+        private float _toolbarScroll;
+        private float _dragScrollStart;
+        private Vector2 _dragOrigin;
+        private bool _trackingDrag;
+        private bool _dragging;
+        private bool _disposed;
 
-        public bool IsOpen { get { return _open.target || _open.faded > 0f; } }
+        internal Rect ToolbarViewport { get; private set; }
+        internal Rect FirstToolRect { get; private set; }
+        internal Rect PanelRect { get; private set; }
+
+        public bool IsOpen
+        {
+            get { SynchronizeExternalState(); return _open.target || _progress > 0f; }
+        }
 
         public URflowToolsHost(Action repaint)
         {
             _repaint = repaint;
-            _panel = new URflowKeyframeMovePanel(repaint);
-            _open.speed = 6f;
+            _panel = new URflowKeyframeMovePanel(repaint, StartSweep);
+            _tools = new[] { new ToolEntry("Keyframe Move", "关键帧移动", "MoveTool", Open) };
+            // AnimBool remains the navigation state; time-based drawing fixes the duration.
+            _open.speed = 1f;
             _open.valueChanged.AddListener(Repaint);
             Undo.undoRedoPerformed += RefreshIfOpen;
+            EditorApplication.update += Tick;
         }
 
-        private void Repaint() { _repaint(); }
+        private void Repaint() { if (!_disposed) _repaint(); }
 
         public void RefreshIfOpen()
         {
@@ -33,50 +67,107 @@ namespace URflow
 
         public void DrawToolbar(GUIStyle button, Func<string, string, string> text)
         {
-            using (new EditorGUILayout.HorizontalScope())
+            Rect strip = GUILayoutUtility.GetRect(0f, 84f, GUILayout.ExpandWidth(true));
+            EditorGUI.DrawRect(strip, URflowVisuals.PanelBackground);
+            EditorGUI.DrawRect(new Rect(strip.x, strip.y, strip.width, 1f), URflowVisuals.Divider);
+            GUIStyle title = new GUIStyle(EditorStyles.label) { fontSize = 10, fontStyle = FontStyle.Bold };
+            title.normal.textColor = new Color(.55f, .56f, .59f);
+            GUI.Label(new Rect(strip.x + 16f, strip.y + 7f, strip.width - 32f, 16f), text("TOOLS", "工具"), title);
+
+            ToolbarViewport = new Rect(strip.x + 16f, strip.y + 28f, Mathf.Max(0f, strip.width - 32f), 48f);
+            float contentWidth = _tools.Length * 52f - 8f;
+            float maxScroll = Mathf.Max(0f, contentWidth - ToolbarViewport.width);
+            _toolbarScroll = Mathf.Clamp(_toolbarScroll, 0f, maxScroll);
+            HandleToolbarInput(ToolbarViewport, maxScroll);
+
+            GUIStyle entry = new GUIStyle(button)
             {
-                GUILayout.Space(16f);
-                GUIStyle entry = new GUIStyle(button)
+                fixedHeight = 44f, fixedWidth = 44f,
+                imagePosition = ImagePosition.ImageOnly,
+                padding = new RectOffset(10, 10, 10, 10)
+            };
+            URflowVisuals.StyleButton(entry);
+            GUI.BeginGroup(ToolbarViewport);
+            try
+            {
+                for (int i = 0; i < _tools.Length; i++)
                 {
-                    fixedHeight = 46f,
-                    fixedWidth = 92f,
-                    fontSize = 11,
-                    imagePosition = ImagePosition.ImageAbove,
-                    padding = new RectOffset(4, 4, 3, 3)
-                };
-                Texture icon = EditorGUIUtility.IconContent("MoveTool").image;
-                if (GUILayout.Button(new GUIContent(text("Keyframe Move", "关键帧移动"), icon,
-                    text("Move selected property curves to static values", "将选中属性的整条曲线对齐静态值")), entry))
-                {
-                    _open.target = true;
-                    _panelError = null;
-                    _panel.Refresh(true);
-                    GUI.FocusControl(null);
-                    GUIUtility.ExitGUI();
+                    ToolEntry tool = _tools[i];
+                    Rect tile = new Rect(i * 52f - _toolbarScroll, 0f, 44f, 44f);
+                    if (i == 0) FirstToolRect = new Rect(ToolbarViewport.x + tile.x, ToolbarViewport.y, 44f, 44f);
+                    if (tile.xMax < 0f || tile.x > ToolbarViewport.width) continue;
+                    Texture icon = EditorGUIUtility.IconContent(tool.Icon).image;
+                    if (GUI.Button(tile, new GUIContent(icon, text(tool.English, tool.Chinese)), entry)) tool.Open();
                 }
-                GUILayout.FlexibleSpace();
-                GUILayout.Space(16f);
             }
+            finally { GUI.EndGroup(); }
+        }
+
+        private void HandleToolbarInput(Rect viewport, float maxScroll)
+        {
+            Event current = Event.current;
+            int control = GUIUtility.GetControlID(FocusType.Passive);
+            if (!GUI.enabled || maxScroll <= 0f)
+            {
+                if (_dragging && GUIUtility.hotControl == control) GUIUtility.hotControl = 0;
+                _trackingDrag = _dragging = false;
+                return;
+            }
+            if (current.type == EventType.ScrollWheel && viewport.Contains(current.mousePosition))
+            {
+                float next = Mathf.Clamp(_toolbarScroll + (current.delta.x + current.delta.y) * 22f, 0f, maxScroll);
+                if (!Mathf.Approximately(next, _toolbarScroll))
+                { _toolbarScroll = next; current.Use(); Repaint(); }
+            }
+            if (current.type == EventType.MouseDown && current.button == 0 && viewport.Contains(current.mousePosition))
+            {
+                _trackingDrag = true;
+                _dragOrigin = current.mousePosition;
+                _dragScrollStart = _toolbarScroll;
+            }
+            else if (current.type == EventType.MouseDrag && _trackingDrag)
+            {
+                if (!_dragging && Mathf.Abs(current.mousePosition.x - _dragOrigin.x) > 6f)
+                { _dragging = true; GUIUtility.hotControl = control; }
+                if (_dragging)
+                {
+                    _toolbarScroll = Mathf.Clamp(_dragScrollStart - current.mousePosition.x + _dragOrigin.x, 0f, maxScroll);
+                    current.Use(); Repaint();
+                }
+            }
+            else if (current.type == EventType.MouseUp && current.button == 0)
+            {
+                if (_dragging)
+                { if (GUIUtility.hotControl == control) GUIUtility.hotControl = 0; current.Use(); }
+                _trackingDrag = _dragging = false;
+            }
+        }
+
+        private void Open()
+        {
+            BeginTransition(true);
+            StartSweep();
+            _panelError = null;
+            _panel.Refresh(true);
+            GUI.FocusControl(null);
+            GUIUtility.ExitGUI();
         }
 
         public void DrawPanel(Rect area, GUIStyle button, GUIStyle selected,
             GUIStyle primary, Func<string, string, string> text)
         {
-            if (!IsOpen) return;
-            if (GUI.enabled && Event.current.type == EventType.KeyDown &&
-                Event.current.keyCode == KeyCode.Escape)
-            {
-                Close();
-                Event.current.Use();
-            }
+            if (!IsOpen) { PanelRect = new Rect(); return; }
+            if (GUI.enabled && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Escape)
+            { Close(); Event.current.Use(); }
 
+            float height = Mathf.Min(420f, area.height);
+            Rect sheet = new Rect(0f, area.height - height * _progress, area.width, height);
+            PanelRect = new Rect(area.x + sheet.x, area.y + sheet.y, sheet.width, sheet.height);
             GUI.BeginGroup(area);
             try
             {
-                Rect sheet = new Rect(0f, area.height * (1f - _open.faded), area.width, area.height);
-                EditorGUI.DrawRect(sheet, new Color(0.16f, 0.16f, 0.16f));
-                EditorGUI.DrawRect(new Rect(sheet.x, sheet.y, sheet.width, 1f),
-                    new Color(0.25f, 0.25f, 0.25f));
+                URflowVisuals.DrawSurface(sheet, URflowVisuals.PanelBackground, URflowVisuals.Divider);
+                if (URflowVisuals.DrawEdgeSweep(sheet, _sweepStarted)) Repaint();
                 GUILayout.BeginArea(sheet);
                 try
                 {
@@ -94,27 +185,71 @@ namespace URflow
                 }
                 catch (ExitGUIException) { throw; }
                 catch (Exception exception)
-                {
-                    _panelError = exception.Message;
-                    Repaint();
-                    GUIUtility.ExitGUI();
-                }
+                { _panelError = exception.Message; Repaint(); GUIUtility.ExitGUI(); }
                 finally { GUILayout.EndArea(); }
             }
             finally { GUI.EndGroup(); }
         }
 
+        private void BeginTransition(bool target)
+        {
+            UpdateProgress();
+            _transitionFrom = _progress;
+            _transitionTarget = target;
+            _transitionStarted = EditorApplication.timeSinceStartup;
+            _transitioning = true;
+            _open.target = target;
+            Repaint();
+        }
+
+        private void SynchronizeExternalState()
+        {
+            // Validation and Unity lifecycle restoration can set the AnimBool value directly.
+            if (_open.isAnimating) return;
+            float endpoint = _open.target ? 1f : 0f;
+            if (_transitioning || !Mathf.Approximately(_progress, endpoint))
+            { _transitioning = false; _progress = endpoint; _transitionTarget = _open.target; }
+        }
+
+        private void UpdateProgress()
+        {
+            if (!_transitioning) return;
+            float elapsed = (float)(EditorApplication.timeSinceStartup - _transitionStarted);
+            float t = Mathf.Clamp01(elapsed / URflowVisuals.PanelOpenSeconds);
+            float eased = 1f - Mathf.Pow(1f - t, 3f);
+            _progress = Mathf.Lerp(_transitionFrom, _transitionTarget ? 1f : 0f, eased);
+            if (t >= 1f)
+            {
+                _transitioning = false;
+                _progress = _transitionTarget ? 1f : 0f;
+                _open.value = _transitionTarget;
+            }
+        }
+
+        private void Tick()
+        {
+            SynchronizeExternalState();
+            bool wasTransitioning = _transitioning;
+            UpdateProgress();
+            bool sweepActive = IsOpen && EditorApplication.timeSinceStartup - _sweepStarted < URflowVisuals.EdgeSweepSeconds;
+            if (wasTransitioning || sweepActive) Repaint();
+        }
+
+        private void StartSweep() { _sweepStarted = EditorApplication.timeSinceStartup; Repaint(); }
+
         private void Close()
         {
-            _open.target = false;
+            BeginTransition(false);
             GUI.FocusControl(null);
             Repaint();
         }
 
         public void Dispose()
         {
+            _disposed = true;
             _open.valueChanged.RemoveListener(Repaint);
             Undo.undoRedoPerformed -= RefreshIfOpen;
+            EditorApplication.update -= Tick;
             _panel.Dispose();
         }
     }

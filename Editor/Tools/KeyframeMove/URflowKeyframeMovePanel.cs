@@ -8,6 +8,7 @@ namespace URflow
     internal sealed class URflowKeyframeMovePanel : IDisposable
     {
         private readonly Action _repaint;
+        private readonly Action _onApplied;
         private URflowKeyframeMoveAnchor _anchor = URflowKeyframeMoveAnchor.Last;
         private URflowKeyframeMoveMode _mode = URflowKeyframeMoveMode.Translate;
         private URflowKeyframeMovePreview _preview;
@@ -18,7 +19,8 @@ namespace URflow
         private bool _pending;
         private bool _disposed;
 
-        public URflowKeyframeMovePanel(Action repaint) { _repaint = repaint; }
+        public URflowKeyframeMovePanel(Action repaint, Action onApplied = null)
+        { _repaint = repaint; _onApplied = onApplied; }
 
         public void Refresh(bool clearNotice = false)
         {
@@ -52,11 +54,13 @@ namespace URflow
             EditorApplication.delayCall += () =>
             {
                 if (_disposed) return;
+                bool applied = false;
                 try
                 {
                     int count;
                     if (URflowKeyframeMoveService.TryApply(plan, out count, out _error))
                     {
+                        applied = true;
                         _modifiedCount = count;
                         _preview = null;
                     }
@@ -69,6 +73,12 @@ namespace URflow
                     _pending = false;
                     _repaint();
                 }
+                if (applied && _onApplied != null)
+                {
+                    try { _onApplied(); }
+                    catch (ExitGUIException) { throw; }
+                    catch (Exception ex) { Debug.LogException(ex); }
+                }
                 if (string.IsNullOrEmpty(_error)) Refresh();
             };
         }
@@ -78,42 +88,54 @@ namespace URflow
         {
             Color oldColor = GUI.color;
             bool oldEnabled = GUI.enabled;
+            GUIStyle secondaryButton = Button(button);
+            GUIStyle selectedButton = Button(selected, false, true);
+            GUIStyle primaryButton = Button(primary, true);
+            GUIStyle closeButton = Button(button);
+            closeButton.fontSize = 16;
+            closeButton.padding = new RectOffset(0, 0, 0, 0);
             try
             {
                 using (new EditorGUILayout.VerticalScope())
                 {
-                    GUILayout.Space(10f);
+                    GUILayout.Space(12f);
                     using (new EditorGUILayout.HorizontalScope())
                     {
                         GUILayout.Space(16f);
-                        GUILayout.Label(text("Keyframe Move", "关键帧移动"), Label(true));
+                        GUIStyle heading = Label(true);
+                        heading.fontSize = 15;
+                        GUILayout.Label(text("Keyframe Move", "关键帧移动"), heading, GUILayout.Height(24f));
                         GUILayout.FlexibleSpace();
-                        if (GUILayout.Button(new GUIContent("×", text("Close", "关闭")), button,
+                        if (GUILayout.Button(new GUIContent("×", text("Close", "关闭")), closeButton,
                             GUILayout.Width(26f), GUILayout.Height(24f))) close();
                         GUILayout.Space(16f);
                     }
-                    GUILayout.Space(6f);
+                    GUILayout.Space(9f);
+                    DrawDivider();
                     using (var scrollView = new EditorGUILayout.ScrollViewScope(_scroll, GUILayout.ExpandHeight(true)))
                     {
                         _scroll = scrollView.scrollPosition;
-                        DrawBody(button, selected, text);
+                        DrawBody(secondaryButton, selectedButton, text);
                     }
+                    DrawDivider();
+                    GUILayout.Space(10f);
                     using (new EditorGUILayout.HorizontalScope())
                     {
                         GUILayout.Space(16f);
                         using (new EditorGUI.DisabledScope(_pending))
                         {
-                            if (GUILayout.Button(text("Refresh", "刷新"), button,
-                                GUILayout.Width(60f), GUILayout.Height(30f))) { _modifiedCount = null; Refresh(true); }
+                            if (GUILayout.Button(text("Refresh", "刷新"), secondaryButton,
+                                GUILayout.Width(68f), GUILayout.Height(34f))) { _modifiedCount = null; Refresh(true); }
                         }
+                        GUILayout.Space(4f);
                         using (new EditorGUI.DisabledScope(_pending || _preview == null || !_preview.IsValid))
                         {
-                            if (GUILayout.Button(text("Apply Move", "应用移动"), primary,
-                                GUILayout.Height(30f), GUILayout.ExpandWidth(true))) Apply();
+                            if (GUILayout.Button(text("Apply Move", "应用移动"), primaryButton,
+                                GUILayout.Height(34f), GUILayout.ExpandWidth(true))) Apply();
                         }
                         GUILayout.Space(16f);
                     }
-                    GUILayout.Space(8f);
+                    GUILayout.Space(12f);
                 }
             }
             finally { GUI.color = oldColor; GUI.enabled = oldEnabled; }
@@ -126,23 +148,26 @@ namespace URflow
                 GUILayout.Space(16f);
                 using (new EditorGUILayout.VerticalScope())
                 {
-                    GUILayout.Label(text("Align to", "对齐基准"), Label());
+                    GUILayout.Space(12f);
+                    GUILayout.Label(text("ALIGN TO", "对齐基准"), SectionLabel());
+                    GUILayout.Space(4f);
                     using (new EditorGUI.DisabledScope(_pending))
                     {
                         using (new EditorGUILayout.HorizontalScope())
                         {
                             if (GUILayout.Toggle(_anchor == URflowKeyframeMoveAnchor.First,
                                 text("First Frame", "首帧"), _anchor == URflowKeyframeMoveAnchor.First ? selected : button,
-                                GUILayout.Height(28f)) && _anchor != URflowKeyframeMoveAnchor.First)
+                                GUILayout.Height(32f)) && _anchor != URflowKeyframeMoveAnchor.First)
                             { _anchor = URflowKeyframeMoveAnchor.First; _modifiedCount = null; Refresh(true); }
+                            GUILayout.Space(4f);
                             if (GUILayout.Toggle(_anchor == URflowKeyframeMoveAnchor.Last,
                                 text("Last Frame", "尾帧"), _anchor == URflowKeyframeMoveAnchor.Last ? selected : button,
-                                GUILayout.Height(28f)) && _anchor != URflowKeyframeMoveAnchor.Last)
+                                GUILayout.Height(32f)) && _anchor != URflowKeyframeMoveAnchor.Last)
                             { _anchor = URflowKeyframeMoveAnchor.Last; _modifiedCount = null; Refresh(true); }
                         }
-                        GUILayout.Space(6f);
+                        GUILayout.Space(9f);
                         bool ratio = EditorGUILayout.ToggleLeft(text("Proportional adjustment", "按比例调整"),
-                            _mode == URflowKeyframeMoveMode.Proportional, Label());
+                            _mode == URflowKeyframeMoveMode.Proportional, Label(), GUILayout.Height(20f));
                         if (ratio != (_mode == URflowKeyframeMoveMode.Proportional))
                         {
                             _mode = ratio ? URflowKeyframeMoveMode.Proportional : URflowKeyframeMoveMode.Translate;
@@ -150,14 +175,16 @@ namespace URflow
                             Refresh(true);
                         }
                     }
-                    GUILayout.Space(8f);
-                    if (_pending) GUILayout.Label(text("Reading static values…", "正在读取静态值…"), Label());
+                    GUILayout.Space(12f);
+                    GUILayout.Label(text("PREVIEW", "预览"), SectionLabel());
+                    GUILayout.Space(4f);
+                    if (_pending) GUILayout.Label(text("Reading static values…", "正在读取静态值…"), Label(false, true, true));
                     if (!string.IsNullOrEmpty(_error)) EditorGUILayout.HelpBox(_error, MessageType.Warning);
                     if (_preview != null)
                     {
                         string context = (_preview.Root != null ? _preview.Root.name : "") + " / " +
                             (_preview.Clip != null ? _preview.Clip.name : "");
-                        GUILayout.Label(context, Label(false, true), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
+                        GUILayout.Label(context, Label(false, true, true), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
                         GUILayout.Space(6f);
                         DrawRows(text);
                     }
@@ -171,8 +198,9 @@ namespace URflow
                     }
                     GUILayout.Space(8f);
                     GUILayout.Label(text("Selected properties: all keys. Static values are read after exiting Animation preview.",
-                        "仅移动选中属性的全部关键帧。退出动画预览后读取静态值。"), Label(false, true), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
-                    GUILayout.Space(6f);
+                        "仅移动选中属性的全部关键帧。退出动画预览后读取静态值。"), Label(false, true, true),
+                        GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
+                    GUILayout.Space(10f);
                 }
                 GUILayout.Space(16f);
             }
@@ -181,45 +209,75 @@ namespace URflow
         private void DrawRows(Func<string, string, string> text)
         {
             bool proportional = _mode == URflowKeyframeMoveMode.Proportional;
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                GUILayout.Label(text("Property", "属性"), Label(), GUILayout.MinWidth(62f));
-                GUILayout.Label(text("Anchor", "基准值"), Numeric(), GUILayout.Width(56f));
-                GUILayout.Label(text("Static", "默认值"), Numeric(), GUILayout.Width(56f));
-                GUILayout.Label(proportional ? text("Factor", "倍率") : text("Offset", "偏移"),
-                    Numeric(), GUILayout.Width(56f));
-            }
+            GUIStyle card = new GUIStyle();
+            URflowVisuals.StyleButton(card);
+            card.padding = new RectOffset(10, 10, 9, 9);
             foreach (URflowKeyframeMovePreviewRow row in _preview.Rows)
             {
-                Rect separator = GUILayoutUtility.GetRect(0f, 1f, GUILayout.ExpandWidth(true));
-                EditorGUI.DrawRect(separator, new Color(0.25f, 0.25f, 0.25f));
-                using (new EditorGUILayout.HorizontalScope())
+                using (new EditorGUILayout.VerticalScope(card))
                 {
                     GUILayout.Label(new GUIContent(PropertyLabel(row.Binding, text), row.Label + " / " + row.Binding.propertyName),
-                        Label(), GUILayout.MinWidth(62f), GUILayout.ExpandWidth(true));
-                    GUILayout.Label(row.Result == null ? new GUIContent("—") : ValueContent(row.Result.OriginalAnchorValue), Numeric(), GUILayout.Width(56f));
-                    GUILayout.Label(row.Result == null ? new GUIContent("—") : ValueContent(row.Result.TargetValue), Numeric(), GUILayout.Width(56f));
-                    GUILayout.Label(row.Result == null ? new GUIContent("—") : ValueContent(row.Result.DeltaOrFactor), Numeric(), GUILayout.Width(56f));
+                        Label(true), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
+                    if (!string.IsNullOrEmpty(row.Binding.path))
+                        GUILayout.Label(new GUIContent(row.Binding.path, row.Binding.path), Label(false, true, true),
+                            GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
+                    GUILayout.Space(6f);
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        DrawValue(text("ANCHOR", "基准值"), row.Result == null ? null : ValueContent(row.Result.OriginalAnchorValue));
+                        DrawValue(text("STATIC", "默认值"), row.Result == null ? null : ValueContent(row.Result.TargetValue));
+                        DrawValue(proportional ? text("FACTOR", "倍率") : text("OFFSET", "偏移"),
+                            row.Result == null ? null : ValueContent(row.Result.DeltaOrFactor));
+                    }
+                    if (!string.IsNullOrEmpty(row.Error)) EditorGUILayout.HelpBox(row.Error, MessageType.Warning);
+                    if (row.Result != null)
+                    {
+                        if (row.Result.IsZeroFactor) EditorGUILayout.HelpBox(text("Factor 0 removes all motion on this property.",
+                            "倍率为 0：该属性的动画变化会归零。"), MessageType.Warning);
+                        else if (row.Result.IsNegativeFactor) EditorGUILayout.HelpBox(text("Negative factor reverses values and motion direction.",
+                            "负倍率：数值符号与运动方向会反转。"), MessageType.Warning);
+                        Keyframe[] keys = row.Result.Curve.keys;
+                        string range = keys.Length == 1 ? Number(keys[0].value) :
+                            Number(keys[0].value) + " → " + Number(keys[keys.Length - 1].value);
+                        GUILayout.Space(5f);
+                        GUILayout.Label(text("Result: ", "调整后：") + range + "  (" + keys.Length + " " +
+                            text("keys", "帧") + ")", Label(false, true, true), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
+                    }
                 }
-                if (!string.IsNullOrEmpty(row.Binding.path))
-                    GUILayout.Label(new GUIContent(row.Binding.path, row.Binding.path), Label(false, true),
-                        GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
-                if (!string.IsNullOrEmpty(row.Error)) EditorGUILayout.HelpBox(row.Error, MessageType.Warning);
-                if (row.Result == null) continue;
-                if (row.Result.IsZeroFactor) EditorGUILayout.HelpBox(text("Factor 0 removes all motion on this property.",
-                    "倍率为 0：该属性的动画变化会归零。"), MessageType.Warning);
-                else if (row.Result.IsNegativeFactor) EditorGUILayout.HelpBox(text("Negative factor reverses values and motion direction.",
-                    "负倍率：数值符号与运动方向会反转。"), MessageType.Warning);
-                Keyframe[] keys = row.Result.Curve.keys;
-                string range = keys.Length == 1 ? Number(keys[0].value) :
-                    Number(keys[0].value) + " → " + Number(keys[keys.Length - 1].value);
-                GUILayout.Label(text("Result: ", "调整后：") + range + "  (" + keys.Length + " " +
-                    text("keys", "帧") + ")", Label(false, true), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
                 GUILayout.Space(6f);
             }
         }
 
-        private static GUIStyle Label(bool bold = false, bool wrap = false)
+        private static void DrawValue(string name, GUIContent value)
+        {
+            using (new EditorGUILayout.VerticalScope(GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true)))
+            {
+                GUILayout.Label(name, SectionLabel(), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
+                GUIStyle numeric = Label(true);
+                numeric.fontSize = 12;
+                GUILayout.Label(value ?? new GUIContent("—"), numeric, GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
+            }
+        }
+
+        private static void DrawDivider()
+        {
+            Rect rect = GUILayoutUtility.GetRect(0f, 1f, GUILayout.ExpandWidth(true));
+            EditorGUI.DrawRect(rect, URflowVisuals.Divider);
+        }
+
+        private static GUIStyle Button(GUIStyle source, bool primary = false, bool selected = false)
+        {
+            GUIStyle style = new GUIStyle(source);
+            if (selected) URflowVisuals.StyleSelectedButton(style);
+            else URflowVisuals.StyleButton(style, primary);
+            style.fontStyle = FontStyle.Bold;
+            style.fontSize = primary ? 13 : 11;
+            style.alignment = TextAnchor.MiddleCenter;
+            style.padding = new RectOffset(8, 8, 4, 4);
+            return style;
+        }
+
+        private static GUIStyle Label(bool bold = false, bool wrap = false, bool muted = false)
         {
             GUIStyle style = new GUIStyle(EditorStyles.label)
             {
@@ -228,14 +286,14 @@ namespace URflow
                 wordWrap = wrap,
                 clipping = TextClipping.Clip
             };
-            style.normal.textColor = new Color(0.85f, 0.85f, 0.85f);
+            style.normal.textColor = muted ? new Color(.56f, .58f, .62f) : new Color(.87f, .88f, .9f);
             return style;
         }
 
-        private static GUIStyle Numeric()
+        private static GUIStyle SectionLabel()
         {
-            GUIStyle style = Label();
-            style.alignment = TextAnchor.MiddleRight;
+            GUIStyle style = Label(false, false, true);
+            style.fontSize = 9;
             return style;
         }
 
