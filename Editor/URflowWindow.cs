@@ -158,11 +158,11 @@ namespace URflow
                 Color backgroundColor = GUI.color;
                 try
                 {
-                    if (blockBackground) GUI.color *= new Color(0.55f, 0.55f, 0.55f, 1f);
+                    EditorGUILayout.Space(2);
+                    DrawTitleOverlay();
                     using (new EditorGUI.DisabledScope(blockBackground))
                     {
-                        EditorGUILayout.Space(2);
-                        DrawTitleOverlay();
+                        if (blockBackground) GUI.color *= new Color(0.55f, 0.55f, 0.55f, 1f);
                         DrawCurveEditor();
                         EditorGUILayout.Space(4);
                         DrawParams();
@@ -170,6 +170,7 @@ namespace URflow
                         DrawApplyBar();
                         EditorGUILayout.Space(8);
                         DrawPresets();
+                        GUI.color = backgroundColor;
                         EditorGUILayout.Space(4);
                         if (_toolsHost != null) _toolsHost.DrawToolbar(MakeHoverStyle(GUI.skin.button), L);
                     }
@@ -181,7 +182,8 @@ namespace URflow
                 }
 
                 GUILayout.FlexibleSpace();
-                DrawSettingsFooter();
+                using (new EditorGUI.DisabledScope(_toolsHost != null && _toolsHost.IsOpen))
+                    DrawSettingsFooter();
             }
             finally { EditorGUILayout.EndVertical(); }
 

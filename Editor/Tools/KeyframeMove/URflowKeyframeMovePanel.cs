@@ -18,6 +18,12 @@ namespace URflow
         private int? _modifiedCount;
         private bool _pending;
         private bool _disposed;
+        private Vector2 _layoutSize = new Vector2(296f, 420f);
+        internal Rect ActionsRect { get; private set; }
+        internal Rect CloseRect { get; private set; }
+        internal Rect BodyRect { get; private set; }
+
+        internal void SetLayoutSize(Vector2 size) { _layoutSize = size; }
 
         public URflowKeyframeMovePanel(Action repaint, Action onApplied = null)
         { _repaint = repaint; _onApplied = onApplied; }
@@ -96,46 +102,42 @@ namespace URflow
             closeButton.padding = new RectOffset(0, 0, 0, 0);
             try
             {
-                using (new EditorGUILayout.VerticalScope())
+                float width = _layoutSize.x;
+                float height = _layoutSize.y;
+                GUIStyle heading = Label(true);
+                heading.fontSize = 15;
+                GUI.Label(new Rect(16f, 12f, width - 74f, 24f), text("Keyframe Move", "关键帧移动"), heading);
+                CloseRect = new Rect(width - 42f, 12f, 26f, 24f);
+                if (GUI.Button(CloseRect, new GUIContent("×", text("Close", "关闭")), closeButton)) close();
+                EditorGUI.DrawRect(new Rect(0f, 50f, width, 1f), URflowVisuals.Divider);
+                // Only this viewport can grow/scroll. Header and actions stay inside the sheet.
+                Rect body = new Rect(0f, 51f, width, Mathf.Max(0f, height - 113f));
+                BodyRect = body;
+                GUILayout.BeginArea(body);
+                try
                 {
-                    GUILayout.Space(12f);
-                    using (new EditorGUILayout.HorizontalScope())
-                    {
-                        GUILayout.Space(16f);
-                        GUIStyle heading = Label(true);
-                        heading.fontSize = 15;
-                        GUILayout.Label(text("Keyframe Move", "关键帧移动"), heading, GUILayout.Height(24f));
-                        GUILayout.FlexibleSpace();
-                        if (GUILayout.Button(new GUIContent("×", text("Close", "关闭")), closeButton,
-                            GUILayout.Width(26f), GUILayout.Height(24f))) close();
-                        GUILayout.Space(16f);
-                    }
-                    GUILayout.Space(9f);
-                    DrawDivider();
-                    using (var scrollView = new EditorGUILayout.ScrollViewScope(_scroll, GUILayout.ExpandHeight(true)))
+                    using (var scrollView = new EditorGUILayout.ScrollViewScope(_scroll,
+                        GUILayout.Height(body.height), GUILayout.MinHeight(0f)))
                     {
                         _scroll = scrollView.scrollPosition;
                         DrawBody(secondaryButton, selectedButton, text);
                     }
-                    DrawDivider();
-                    GUILayout.Space(10f);
-                    using (new EditorGUILayout.HorizontalScope())
+                }
+                finally { GUILayout.EndArea(); }
+                EditorGUI.DrawRect(new Rect(0f, height - 62f, width, 1f), URflowVisuals.Divider);
+                ActionsRect = new Rect(16f, height - 46f, width - 32f, 34f);
+                using (new EditorGUI.DisabledScope(_pending))
+                {
+                    if (GUI.Button(new Rect(ActionsRect.x, ActionsRect.y, 68f, 34f), text("Refresh", "刷新"), secondaryButton))
                     {
-                        GUILayout.Space(16f);
-                        using (new EditorGUI.DisabledScope(_pending))
-                        {
-                            if (GUILayout.Button(text("Refresh", "刷新"), secondaryButton,
-                                GUILayout.Width(68f), GUILayout.Height(34f))) { _modifiedCount = null; Refresh(true); }
-                        }
-                        GUILayout.Space(4f);
-                        using (new EditorGUI.DisabledScope(_pending || _preview == null || !_preview.IsValid))
-                        {
-                            if (GUILayout.Button(text("Apply Move", "应用移动"), primaryButton,
-                                GUILayout.Height(34f), GUILayout.ExpandWidth(true))) Apply();
-                        }
-                        GUILayout.Space(16f);
+                        _modifiedCount = null;
+                        Refresh(true);
                     }
-                    GUILayout.Space(12f);
+                }
+                using (new EditorGUI.DisabledScope(_pending || _preview == null || !_preview.IsValid))
+                {
+                    if (GUI.Button(new Rect(ActionsRect.x + 72f, ActionsRect.y, ActionsRect.width - 72f, 34f),
+                        text("Apply Move", "应用移动"), primaryButton)) Apply();
                 }
             }
             finally { GUI.color = oldColor; GUI.enabled = oldEnabled; }

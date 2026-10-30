@@ -28,6 +28,10 @@ namespace URflow
         private const int CornerSegments = 12;
         private const int MaxStraightSegments = 128;
         private const int EdgeCapacity = (CornerSegments + 1 + MaxStraightSegments) * 4 + 1;
+        private const int GlowBands = 16;
+        private const float GlowSigma = 4.25f;
+        private const float GlowStrokeHalfWidth = 3.5f;
+        private const float GlowOpacity = 0.46f;
         private static readonly Dictionary<int, SurfaceAssets> Surfaces = new Dictionary<int, SurfaceAssets>();
         private static readonly Vector2[] CurvePoints = new Vector2[CurveSegments + 1];
         private static readonly Vector2[] CurveNormals = new Vector2[CurveSegments + 1];
@@ -35,10 +39,13 @@ namespace URflow
         private static readonly Vector2[] EdgePoints = new Vector2[EdgeCapacity];
         private static readonly Vector2[] EdgeNormals = new Vector2[EdgeCapacity];
         private static readonly Color[] EdgeColors = new Color[EdgeCapacity];
-        private static readonly float[] EdgeDistances = new float[EdgeCapacity];
         private static readonly RectOffset ButtonBorder = new RectOffset(8, 8, 8, 8);
-        private static readonly float[] HaloWidths = { 12f, 9f, 6.5f, 4.2f, 2.8f };
-        private static readonly float[] HaloAlphas = { 0.025f, 0.035f, 0.045f, 0.07f, 0.10f };
+        private static readonly float[] GlowProfile = CreateGlowProfile();
+        private static readonly Color EdgeAccent = RGB(0x78E2DC);
+        private static readonly Color EdgeBlue = RGB(0x709DF0);
+        private static readonly Color EdgePeak = RGB(0xD9FFFB);
+        private static readonly Vector2 PanelEdgeAxis = new Vector2(0.9396926f, 0.3420201f); // 110 degrees in CSS.
+        private static readonly Vector2 SweepEdgeAxis = new Vector2(0.9659258f, 0.2588190f); // 105 degrees in CSS.
 
         private static ButtonAssets _secondary;
         private static ButtonAssets _primary;
@@ -135,7 +142,21 @@ namespace URflow
 
         internal static void DrawCurve(Rect r, float x1, float y1, float x2, float y2)
         {
-            if (!IsRepaint() || !ValidRect(r) || !Finite(x1) || !Finite(y1) || !Finite(x2) || !Finite(y2)) return;
+            if (!IsRepaint()) return;
+            GL.PushMatrix();
+            try
+            {
+                GL.LoadPixelMatrix();
+                RenderCurve(r, x1, y1, x2, y2, GUI.color);
+            }
+            finally { GL.PopMatrix(); }
+        }
+
+        // The same renderer is used by IMGUI and by offscreen RenderTexture validation.
+        // The caller owns its render target, projection, and clipping; no GUI state is read here.
+        internal static void RenderCurve(Rect r, float x1, float y1, float x2, float y2, Color tint)
+        {
+            if (!ValidRect(r) || !Finite(x1) || !Finite(y1) || !Finite(x2) || !Finite(y2)) return;
             Vector4 parameters = new Vector4(x1, y1, x2, y2);
             if (!_curveValid || _curveRect != r || !_curveParameters.Equals(parameters))
             {
@@ -156,6 +177,42 @@ namespace URflow
             }
             if (!SetLinePass()) return;
 
+            GL.Begin(GL.TRIANGLES);
+            try
+            {
+                // Adjacent translucent bands cover each pixel once, approximating a blurred
+                // 7-pixel stroke. Its colored soft tail now reaches 12-16 pixels from the core.
+                DrawGlowRibbon(tint);
+                DrawRibbonFringe(CurvePoints, CurveNormals, CurveColors, CurveSegments + 1, 0.9f, 0.55f, tint);
+                DrawRibbon(CurvePoints, CurveNormals, CurveColors, CurveSegments + 1, 0.9f, 1f, tint);
+            }
+            finally { GL.End(); }
+        }
+
+        // Only tool/settings sheets opt into the preview's restrained permanent edge glow.
+        internal static void DrawPanelEdge(Rect rect, float radius = CornerRadius)
+        {
+            if (!IsRepaint() || !ValidRect(rect)) return;
+            PrepareEdge(rect, radius);
+            if (!SetLinePass()) return;
+            for (int i = 0; i < _edgeCount; i++)
+            {
+                float position = EdgeProjection(EdgePoints[i], rect, PanelEdgeAxis);
+                Color color;
+                if (position <= 0.35f)
+                {
+                    color = Color.Lerp(EdgeAccent, EdgeBlue, position / 0.35f);
+                    color.a = Mathf.Lerp(0.63f, 0.35f, position / 0.35f);
+                }
+                else
+                {
+                    float amount = Mathf.Clamp01((position - 0.35f) / 0.30f);
+                    color = Color.Lerp(EdgeBlue, Color.white, amount);
+                    color.a = Mathf.Lerp(0.35f, 0.025f, amount);
+                }
+                EdgeColors[i] = color;
+            }
+
             GL.PushMatrix();
             try
             {
@@ -163,13 +220,19 @@ namespace URflow
                 GL.Begin(GL.TRIANGLES);
                 try
                 {
-                    Color tint = GUI.color;
-                    for (int i = 0; i < HaloWidths.Length; i++)
-                        DrawRibbon(CurvePoints, CurveNormals, CurveColors, CurveSegments + 1,
-                            HaloWidths[i] * 0.5f, HaloAlphas[i], tint);
-                    // Soft coverage at the edge surrounds a saturated, 1.8-pixel core.
-                    DrawRibbonFringe(CurvePoints, CurveNormals, CurveColors, CurveSegments + 1, 0.9f, 0.55f, tint);
-                    DrawRibbon(CurvePoints, CurveNormals, CurveColors, CurveSegments + 1, 0.9f, 1f, tint);
+                    DrawRibbon(EdgePoints, EdgeNormals, EdgeColors, _edgeCount, 0.5f, 1f, GUI.color);
+                    for (int i = 0; i < _edgeCount; i++)
+                    {
+                        float x = Mathf.Clamp01((EdgePoints[i].x - rect.x) / rect.width);
+                        float y = Mathf.Max(0f, EdgePoints[i].y - rect.y);
+                        Color color = Color.Lerp(EdgeAccent, EdgeBlue, x / 0.55f);
+                        color.a = (1f - Mathf.SmoothStep(0f, 1f, x / 0.8f))
+                            * Mathf.Exp(-y * y / 128f) * 0.08f;
+                        EdgeColors[i] = color;
+                    }
+                    DrawRibbon(EdgePoints, EdgeNormals, EdgeColors, _edgeCount, 7f, 0.15f, GUI.color);
+                    DrawRibbon(EdgePoints, EdgeNormals, EdgeColors, _edgeCount, 4f, 0.25f, GUI.color);
+                    DrawRibbon(EdgePoints, EdgeNormals, EdgeColors, _edgeCount, 2f, 0.4f, GUI.color);
                 }
                 finally { GL.End(); }
             }
@@ -183,21 +246,24 @@ namespace URflow
             if (elapsed < 0d || elapsed >= EdgeSweepSeconds) return false;
             if (!IsRepaint()) return true;
 
-            if (!Finite(radius)) radius = CornerRadius;
-            float corner = Mathf.Clamp(radius, 0f, Mathf.Min(rect.width, rect.height) * 0.5f);
-            if (!_edgeValid || _edgeRect != rect || !Mathf.Approximately(_edgeRadius, corner))
-                BuildEdge(rect, corner);
+            PrepareEdge(rect, radius);
             if (!SetLinePass()) return false;
 
             float progress = (float)(elapsed / EdgeSweepSeconds);
-            float fade = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(progress / 0.12f))
-                * Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((1f - progress) / 0.16f));
+            float eased = CubicBezierConverter.Evaluate(0.2f, 0.65f, 0.35f, 1f, progress);
+            // CSS positioning is relative to container minus image size. Project the
+            // complete 3W x H gradient so the 105-degree band also matches tall sheets.
+            float backgroundPosition = Mathf.LerpUnclamped(1.6f, -0.6f, eased);
+            float offsetX = -2f * rect.width * backgroundPosition;
+            float gradientLength = 3f * rect.width * SweepEdgeAxis.x + rect.height * SweepEdgeAxis.y;
+            float fade = Mathf.Min(Mathf.Clamp01(progress / 0.14f), Mathf.Clamp01((1f - progress) / 0.15f));
             for (int i = 0; i < _edgeCount; i++)
             {
-                float behind = Mathf.Repeat(progress - EdgeDistances[i], 1f);
-                float strength = behind <= 0.21f ? Mathf.Pow(1f - behind / 0.21f, 2f) : 0f;
-                Color color = CurveColor(EdgeDistances[i]);
-                color.a = strength * fade;
+                Vector2 point = EdgePoints[i];
+                float distance = ((point.x - rect.x - offsetX) * SweepEdgeAxis.x
+                    + (point.y - rect.y) * SweepEdgeAxis.y) / gradientLength - 0.5f;
+                Color color = SweepColor(distance);
+                color.a *= fade;
                 EdgeColors[i] = color;
             }
 
@@ -209,9 +275,10 @@ namespace URflow
                 try
                 {
                     Color tint = GUI.color;
-                    DrawRibbon(EdgePoints, EdgeNormals, EdgeColors, _edgeCount, 3.5f, 0.10f, tint);
-                    DrawRibbon(EdgePoints, EdgeNormals, EdgeColors, _edgeCount, 2f, 0.17f, tint);
-                    DrawRibbon(EdgePoints, EdgeNormals, EdgeColors, _edgeCount, 0.55f, 0.85f, tint);
+                    DrawRibbon(EdgePoints, EdgeNormals, EdgeColors, _edgeCount, 3.5f, 0.06f, tint);
+                    DrawRibbon(EdgePoints, EdgeNormals, EdgeColors, _edgeCount, 1.8f, 0.14f, tint);
+                    DrawRibbonFringe(EdgePoints, EdgeNormals, EdgeColors, _edgeCount, 0.75f, 0.45f, tint);
+                    DrawRibbon(EdgePoints, EdgeNormals, EdgeColors, _edgeCount, 0.75f, 1f, tint);
                 }
                 finally { GL.End(); }
             }
@@ -263,6 +330,99 @@ namespace URflow
         {
             return t <= 0.5f ? Color.Lerp(CurveGreen, CurveCyan, t * 2f)
                 : Color.Lerp(CurveCyan, CurveBlue, (t - 0.5f) * 2f);
+        }
+
+        private static float[] CreateGlowProfile()
+        {
+            float[] profile = new float[GlowBands + 1];
+            float denominator = GlowSigma * Mathf.Sqrt(2f);
+            for (int i = 0; i <= GlowBands; i++)
+                profile[i] = GlowOpacity * 0.5f * (Erf((i + GlowStrokeHalfWidth) / denominator)
+                    - Erf((i - GlowStrokeHalfWidth) / denominator));
+            return profile;
+        }
+
+        private static float Erf(float value)
+        {
+            float sign = value < 0f ? -1f : 1f;
+            float x = Mathf.Abs(value);
+            float t = 1f / (1f + 0.3275911f * x);
+            float polynomial = (((((1.0614054f * t - 1.4531521f) * t + 1.4214138f) * t
+                - 0.28449672f) * t + 0.2548296f) * t);
+            return sign * (1f - polynomial * Mathf.Exp(-x * x));
+        }
+
+        private static void DrawGlowRibbon(Color tint)
+        {
+            for (int i = 1; i <= CurveSegments; i++)
+            {
+                Color first = CurveColors[i - 1] * tint;
+                Color second = CurveColors[i] * tint;
+                for (int band = 0; band < GlowBands; band++)
+                {
+                    Color firstInner = first;
+                    Color firstOuter = first;
+                    Color secondInner = second;
+                    Color secondOuter = second;
+                    firstInner.a *= GlowProfile[band];
+                    secondInner.a *= GlowProfile[band];
+                    firstOuter.a *= GlowProfile[band + 1];
+                    secondOuter.a *= GlowProfile[band + 1];
+                    Vector2 firstNear = CurveNormals[i - 1] * band;
+                    Vector2 secondNear = CurveNormals[i] * band;
+                    Vector2 firstFar = CurveNormals[i - 1] * (band + 1);
+                    Vector2 secondFar = CurveNormals[i] * (band + 1);
+                    Quad(CurvePoints[i - 1] + firstNear, CurvePoints[i - 1] + firstFar,
+                        CurvePoints[i] + secondFar, CurvePoints[i] + secondNear,
+                        firstInner, firstOuter, secondOuter, secondInner);
+                    Quad(CurvePoints[i - 1] - firstNear, CurvePoints[i - 1] - firstFar,
+                        CurvePoints[i] - secondFar, CurvePoints[i] - secondNear,
+                        firstInner, firstOuter, secondOuter, secondInner);
+                }
+            }
+        }
+
+        private static void PrepareEdge(Rect rect, float radius)
+        {
+            if (!Finite(radius)) radius = CornerRadius;
+            float corner = Mathf.Clamp(radius, 0f, Mathf.Min(rect.width, rect.height) * 0.5f);
+            if (!_edgeValid || _edgeRect != rect || !Mathf.Approximately(_edgeRadius, corner))
+                BuildEdge(rect, corner);
+        }
+
+        private static float EdgeProjection(Vector2 point, Rect rect, Vector2 axis)
+        {
+            return ((point.x - rect.x) * axis.x + (point.y - rect.y) * axis.y)
+                / (rect.width * axis.x + rect.height * axis.y);
+        }
+
+        private static Color SweepColor(float distance)
+        {
+            if (distance < -0.14f || distance > 0.15f) return Color.clear;
+            Color color;
+            if (distance < -0.04f)
+            {
+                color = EdgeAccent;
+                color.a = 0.65f * Mathf.InverseLerp(-0.14f, -0.04f, distance);
+            }
+            else if (distance < 0f)
+            {
+                float amount = (distance + 0.04f) / 0.04f;
+                color = Color.Lerp(EdgeAccent, EdgePeak, amount);
+                color.a = Mathf.Lerp(0.65f, 1f, amount);
+            }
+            else if (distance < 0.04f)
+            {
+                float amount = distance / 0.04f;
+                color = Color.Lerp(EdgePeak, EdgeBlue, amount);
+                color.a = Mathf.Lerp(1f, 0.6f, amount);
+            }
+            else
+            {
+                color = EdgeBlue;
+                color.a = 0.6f * (1f - Mathf.InverseLerp(0.04f, 0.15f, distance));
+            }
+            return color;
         }
 
         private static bool SetLinePass()
@@ -363,12 +523,6 @@ namespace URflow
             AddStraight(EdgePoints[0]);
             EdgePoints[_edgeCount++] = EdgePoints[0];
             BuildNormals(EdgePoints, EdgeNormals, _edgeCount, true);
-            EdgeDistances[0] = 0f;
-            for (int i = 1; i < _edgeCount; i++)
-                EdgeDistances[i] = EdgeDistances[i - 1] + Vector2.Distance(EdgePoints[i - 1], EdgePoints[i]);
-            float perimeter = EdgeDistances[_edgeCount - 1];
-            if (perimeter > 0f)
-                for (int i = 1; i < _edgeCount; i++) EdgeDistances[i] /= perimeter;
             _edgeRect = rect;
             _edgeRadius = radius;
             _edgeValid = true;

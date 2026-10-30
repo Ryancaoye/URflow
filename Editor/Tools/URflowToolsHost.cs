@@ -40,6 +40,16 @@ namespace URflow
         internal Rect ToolbarViewport { get; private set; }
         internal Rect FirstToolRect { get; private set; }
         internal Rect PanelRect { get; private set; }
+        internal float PanelProgress { get { return _progress; } }
+        internal Rect PanelActionsRect { get { return OffsetPanelRect(_panel.ActionsRect); } }
+        internal Rect PanelCloseRect { get { return OffsetPanelRect(_panel.CloseRect); } }
+        internal Rect PanelBodyRect { get { return OffsetPanelRect(_panel.BodyRect); } }
+
+        private Rect OffsetPanelRect(Rect local)
+        {
+            local.position += PanelRect.position;
+            return local;
+        }
 
         public bool IsOpen
         {
@@ -51,8 +61,7 @@ namespace URflow
             _repaint = repaint;
             _panel = new URflowKeyframeMovePanel(repaint, StartSweep);
             _tools = new[] { new ToolEntry("Keyframe Move", "关键帧移动", "MoveTool", Open) };
-            // AnimBool remains the navigation state; time-based drawing fixes the duration.
-            _open.speed = 1f;
+            // Navigation is immediate; the independent timestamp owns the 400ms visual transition.
             _open.valueChanged.AddListener(Repaint);
             Undo.undoRedoPerformed += RefreshIfOpen;
             EditorApplication.update += Tick;
@@ -161,12 +170,17 @@ namespace URflow
             { Close(); Event.current.Use(); }
 
             float height = Mathf.Min(420f, area.height);
-            Rect sheet = new Rect(0f, area.height - height * _progress, area.width, height);
+            UpdateProgress();
+            // Match the approved preview: a subtle 24px rise, not a full-height slide.
+            Rect sheet = new Rect(0f, area.height - height + 24f * (1f - _progress), area.width, height);
             PanelRect = new Rect(area.x + sheet.x, area.y + sheet.y, sheet.width, sheet.height);
-            GUI.BeginGroup(area);
+            _panel.SetLayoutSize(sheet.size);
+            Rect animationClip = new Rect(area.x, area.y, area.width, area.height + 24f);
+            GUI.BeginGroup(animationClip);
             try
             {
                 URflowVisuals.DrawSurface(sheet, URflowVisuals.PanelBackground, URflowVisuals.Divider);
+                URflowVisuals.DrawPanelEdge(sheet);
                 if (URflowVisuals.DrawEdgeSweep(sheet, _sweepStarted)) Repaint();
                 GUILayout.BeginArea(sheet);
                 try
@@ -198,16 +212,26 @@ namespace URflow
             _transitionTarget = target;
             _transitionStarted = EditorApplication.timeSinceStartup;
             _transitioning = true;
-            _open.target = target;
+            _open.value = target;
             Repaint();
         }
 
         private void SynchronizeExternalState()
         {
             // Validation and Unity lifecycle restoration can set the AnimBool value directly.
+            if (_transitioning)
+            {
+                if (_open.target != _transitionTarget)
+                {
+                    _transitioning = false;
+                    _progress = _open.target ? 1f : 0f;
+                    _transitionTarget = _open.target;
+                }
+                return;
+            }
             if (_open.isAnimating) return;
             float endpoint = _open.target ? 1f : 0f;
-            if (_transitioning || !Mathf.Approximately(_progress, endpoint))
+            if (!Mathf.Approximately(_progress, endpoint))
             { _transitioning = false; _progress = endpoint; _transitionTarget = _open.target; }
         }
 
@@ -216,7 +240,7 @@ namespace URflow
             if (!_transitioning) return;
             float elapsed = (float)(EditorApplication.timeSinceStartup - _transitionStarted);
             float t = Mathf.Clamp01(elapsed / URflowVisuals.PanelOpenSeconds);
-            float eased = 1f - Mathf.Pow(1f - t, 3f);
+            float eased = CubicBezierConverter.Evaluate(0.2f, 0.75f, 0.3f, 1f, t);
             _progress = Mathf.Lerp(_transitionFrom, _transitionTarget ? 1f : 0f, eased);
             if (t >= 1f)
             {
