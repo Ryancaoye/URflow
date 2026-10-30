@@ -20,7 +20,6 @@ namespace URflow
         private HashSet<string> _favorites;
         private string _selectedCategory = "All";
         private string _searchQuery = "";
-        private string _newPresetName = "";
         private Vector2 _presetScrollPos;
         private int _selectedPresetIndex = -1;
         private int _filter = 0; // 0=All, 1=Favorites, 2=UserPresets
