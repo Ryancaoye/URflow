@@ -16,6 +16,15 @@ All notable changes to URflow will be documented in this file.
 - References — Existing development commits include 9f560f8 (curve math), 1e7c2da (Unity service), ef39a3c (tool panel), 7b74d54 (strict compilation) and f8cd7eb (user startup confirmation). Visual integration is saved as 32a6bd6 on feature/v1.0.4 and synchronized to the D: development package; all 15 source hashes match the final strict-compile inputs. Documentation and workflow records are saved with the accompanying documentation commit; see Git history.
 - Pending — Complete visual acceptance, production Unity refresh and production-scene trial before release. No production project file was manually changed; its latest log has not yet confirmed a reload. Version fields remain 1.0.3; target v1.0.4 is not released and no release archive or tag has been generated.
 
+#### 2026-10-30 glow and panel feedback fixes
+
+- Respond to the user's production screenshot showing weak curve glow, a panel transition that differs from the approved preview and clipped Refresh/Apply Move controls.
+- Keep the saturated 1.8 px curve core and add Gaussian soft tails. Match the approved 24 px panel rise over 400 ms, a single 105-degree diagonal edge sweep over 1900 ms and a dim static border; timing options remain internal.
+- Fix the panel header/footer in the visible sheet and scroll only its body. Dim the main content while keeping the logo and tool strip at normal brightness; background input remains isolated.
+- Preserve the previous 19 math, 19 service and 27 native UI checks as their original validation stage. They did not cover footer containment or appearance pixels; the new feedback triggers explicit geometry, transition timing and offscreen rendering checks.
+- Validation — Strict compilation of 15 source files passes with warning level 4 and warnings as errors, without diagnostics. Unity 2022.3.56f1 passes 19 mathematical checks, 19 current native service checks, 42 glow/footer/actual-animation checks and 30 established native UI checks: 110 checks in total. Production RenderCurve offscreen pixels pass: mean maximum RGB increase at 8 px is 0.051551 and at 12 px is 0.009266; core saturation is 0.881361. The production PNG was inspected at original resolution. Full native-window pixel capture was not performed.
+- Saved as 01c1dba40a9d6aa6b6f57b5e6a344ab793f9be2b on feature/v1.0.4 and synchronized to the D: development package; all 15 source hashes match the strict compilation inputs. The user's screenshots confirm the previous new UI was shown in the production editor; the current fix still needs refresh and user trial. No G: project file was manually changed. Documentation is saved with its accompanying commit; see Git history. Target v1.0.4 remains unreleased and version fields remain 1.0.3.
+
 ## [1.0.3] - 2026-09-03
 
 > Code changes in this release landed between 2026-04-16 and 2026-04-22 but were
