@@ -78,7 +78,7 @@ const doc = new Document({
         new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 100 }, children: [new TextRun({ text: "使用指南与更新记录", size: 28, color: "000000" })] }),
         new Paragraph({ spacing: { before: 1500 } }),
         new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Inspired by Flow for After Effects", size: 20, color: "000000", italics: true })] }),
-        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 100 }, children: [new TextRun({ text: "适用版本 v1.0.3  文档更新 2026-10-30", size: 22, color: "000000" })] }),
+        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 100 }, children: [new TextRun({ text: "适用版本 v1.0.3  文档更新 2026-10-31", size: 22, color: "000000" })] }),
         new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "功能建议与问题反馈 liuyiran02@corp.netease.com", size: 20, color: "555555" })] }),
       ]
     },
@@ -343,6 +343,21 @@ const doc = new Document({
         p("上一轮编译与实际界面事件检查通过，但未覆盖底部操作栏的完整显示和外观像素。本次反馈触发补充页脚几何、展开时序与离屏渲染检查；前一阶段记录保留。"),
         p("严格编译及独立 Unity 的数学、服务、实际界面交互、页脚几何与展开时序检查通过，生产曲线绘制的离屏像素检查通过。助手未取得整窗像素截图；本轮修复仍待用户刷新后检查整窗外观和制作场景效果。"),
         p("目标版本 v1.0.4 尚未发布，版本字段仍为 1.0.3。本轮修复保存于开发分支提交 01c1dba，已同步到开发包。教程与更新记录随对应文档提交保存，具体提交见 Git 历史。"),
+
+        h2("2026年10月31日批量尾帧检查"),
+        p("用户试用后确认关键帧移动符合需要，并提出在参数较多时一键列出尾帧与默认值的差异，再勾选要修改的属性统一对齐。本轮范围限定为 Animation 窗口当前一个动画片段的全部位置和缩放属性。"),
+        p("关键帧移动面板增加 Selected 和 Batch Scan 两种方式。Selected 保留原有选属性、首帧或尾帧对齐；Batch Scan 不要求预先选择属性，只比较每条位置或缩放曲线的最后一个关键帧与未受动画驱动的静态布局值。"),
+        h3("批量检查操作"),
+        p("关联当前界面的场景实例与 Animation 窗口，打开底部 Move 工具，切换 Batch Scan 后自动扫描当前片段；底部 Rescan 可重新扫描。列表按对象路径分组，显示属性轴、动画尾帧、默认值和差值；尾帧指各条曲线的最后一个关键帧，可能早于整个片段的结束时间。"),
+        p("Differences only 默认只看差异，且不勾选任何属性。可以搜索对象或属性，逐项或按对象组勾选；Select Visible 选择当前筛选下可处理的差异项，Clear All 取消全部勾选。数值不一致只表示差异，退场等动画可能故意停在默认位置之外，是否对齐由使用者决定。"),
+        p("筛选保留隐藏项目的勾选，并提示筛选外已选数量；底部 Apply (N) 显示全部已选总数。重新扫描、切换比例模式、Undo/Redo 刷新及重新进入 Batch Scan 会清空勾选。应用前核对总数，统一调整明确勾选的属性。默认整体平移，Proportional adjustment 使位置和缩放按比例调整。"),
+        p("应用后整条曲线的全部关键帧一起变化，使尾帧对齐默认值；不会只改最后一帧。一次 Undo 撤销本批修改，一次 Redo 重做。未勾选属性和其他动画片段不在批量修改范围内。"),
+        h3("无法处理的项目"),
+        p("已经一致的属性无需勾选。找不到对应对象、静态值仍受动画预览或布局驱动、以及比例基准为零却需要对齐到非零默认值的项目保留在列表中并显示原因，不能勾选；这些未勾选项目不会阻止其他有效项目应用。旋转、透明度与对象引用轨道不在本轮扫描范围。"),
+        p("读取默认值时暂时退出当前 Animation 预览，再恢复预览和原时间；录制保持关闭。应用前重新核对当前对象、片段、属性集合，以及已勾选曲线和静态值；发生变化时要求重新扫描，避免使用过期结果。零倍率或负倍率继续显示归零或反转提醒。"),
+        h3("本轮验证和保存"),
+        p("严格编译 17 个 Editor 源文件通过，使用 warning level 4 与 warnings as errors，无编译诊断。独立 Unity 2022.3.56f1 工程通过数学 19、批量服务 30、原选中属性服务 19、原生界面回归 30、批量界面 109（60 原生事件、49 反射状态检查）及原生勾选至 Apply/Undo 的完整路径 9 项，共 216 项检查。尚未取得完整原生窗口像素截图；制作场景外观和操作仍待用户刷新开发包后试用。助手未手动修改 G: 制作工程的代码、资产、配置或缓存。"),
+        p("目标版本仍为未发布的 v1.0.4，正式版本字段保持 1.0.3。批量功能保存于 feature/v1.0.4 的 9389b88bb90a0a0528bd8fed15529db2d6a03de8，已同步到 D: 开发包；编译与安装源哈希一致，旧图标、Logo 和资源 GUID 保留。教程与更新记录随对应文档提交保存，具体提交见 Git 历史。未合并稳定分支、推送、打标签或正式发布。"),
 
       ]
     }
