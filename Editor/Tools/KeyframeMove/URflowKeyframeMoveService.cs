@@ -48,13 +48,16 @@ namespace URflow
         private const BindingFlags Members =
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
-        private sealed class Context
+        // Shared adapter for the explicit selected-properties and batch-scan entries.
+        // ScanAll never falls back from an empty property selection.
+        internal sealed class Context
         {
             public AnimationWindow Window;
             public object State;
             public AnimationClip Clip;
             public GameObject Root;
             public List<EditorCurveBinding> Bindings;
+            public bool ScanAll;
         }
 
         private sealed class ClipSnapshot
@@ -234,7 +237,7 @@ namespace URflow
             }
         }
 
-        private static bool CanOperate(out string error)
+        internal static bool CanOperate(out string error)
         {
             error = null;
             if (Event.current != null)
@@ -255,7 +258,7 @@ namespace URflow
             return true;
         }
 
-        private static Context CaptureContext(AnimationWindow expected)
+        internal static Context CaptureContext(AnimationWindow expected, bool scanAll = false)
         {
             AnimationWindow[] windows = Resources.FindObjectsOfTypeAll<AnimationWindow>();
             AnimationWindow window = expected;
@@ -266,7 +269,7 @@ namespace URflow
                 {
                     if (windows.Length != 1)
                         throw new InvalidOperationException(windows.Length == 0
-                            ? "请打开 Animation 窗口并选中要对齐的属性。"
+                            ? (scanAll ? "请打开 Animation 窗口并关联要扫描的界面和动画片段。" : "请打开 Animation 窗口并选中要对齐的属性。")
                             : "检测到多个 Animation 窗口，请先只保留本次使用的一个窗口。");
                     window = windows[0];
                 }
@@ -299,8 +302,20 @@ namespace URflow
             return new Context
             {
                 Window = window, State = state, Clip = clip, Root = root,
-                Bindings = ReadSelectedBindings(window, state, clip)
+                Bindings = scanAll ? ReadScanBindings(clip) : ReadSelectedBindings(window, state, clip),
+                ScanAll = scanAll
             };
+        }
+
+        private static List<EditorCurveBinding> ReadScanBindings(AnimationClip clip)
+        {
+            var supported = new SortedDictionary<string, EditorCurveBinding>(StringComparer.Ordinal);
+            foreach (EditorCurveBinding binding in AnimationUtility.GetCurveBindings(clip))
+            {
+                string error;
+                if (IsSupportedBinding(binding, out error)) AddBinding(supported, binding);
+            }
+            return new List<EditorCurveBinding>(supported.Values);
         }
 
         private static List<EditorCurveBinding> ReadSelectedBindings(
@@ -416,9 +431,9 @@ namespace URflow
             selected[BindingKey(binding)] = binding;
         }
 
-        private static void ValidateContext(Context captured)
+        internal static void ValidateContext(Context captured)
         {
-            Context current = CaptureContext(captured.Window);
+            Context current = CaptureContext(captured.Window, captured.ScanAll);
             if (current.Clip != captured.Clip || current.Root != captured.Root ||
                 !StringListsEqual(BindingKeys(current.Bindings), BindingKeys(captured.Bindings)))
                 throw new InvalidOperationException("Animation 窗口的对象、动画或属性选择已经改变，请重新刷新。");
@@ -440,7 +455,7 @@ namespace URflow
                 throw new InvalidOperationException("预览中的属性选择已经改变，请重新刷新。");
         }
 
-        private static void OutsidePreview(Context context, Action action, out string notice)
+        internal static void OutsidePreview(Context context, Action action, out string notice)
         {
             notice = string.Empty;
             bool wasPreviewing = context.Window.previewing;
@@ -477,7 +492,7 @@ namespace URflow
             }
         }
 
-        private static bool IsSupportedBinding(EditorCurveBinding binding, out string error)
+        internal static bool IsSupportedBinding(EditorCurveBinding binding, out string error)
         {
             error = null;
             bool transform = binding.type == typeof(Transform) || binding.type == typeof(RectTransform);
@@ -494,7 +509,7 @@ namespace URflow
             return true;
         }
 
-        private static bool TryReadStaticValue(
+        internal static bool TryReadStaticValue(
             GameObject root, EditorCurveBinding binding, out float value, out string error)
         {
             value = 0f;
@@ -549,7 +564,7 @@ namespace URflow
                 (((DrivenTransformProperties)driven & flag) != 0);
         }
 
-        private static void WriteAtomically(
+        internal static void WriteAtomically(
             AnimationClip clip, List<EditorCurveBinding> bindings, List<AnimationCurve> curves)
         {
             ClipSnapshot before = CaptureClip(clip);
@@ -636,7 +651,7 @@ namespace URflow
             return true;
         }
 
-        private static AnimationCurve CloneCurve(AnimationCurve curve)
+        internal static AnimationCurve CloneCurve(AnimationCurve curve)
         {
             if (curve == null) return null;
             return new AnimationCurve(curve.keys)
@@ -656,7 +671,7 @@ namespace URflow
             return field != null ? field.GetValue(instance) : null;
         }
 
-        private static List<string> BindingKeys(List<EditorCurveBinding> bindings)
+        internal static List<string> BindingKeys(List<EditorCurveBinding> bindings)
         {
             var result = new List<string>();
             foreach (EditorCurveBinding binding in bindings) result.Add(BindingKey(binding));
@@ -664,7 +679,7 @@ namespace URflow
             return result;
         }
 
-        private static string BindingKey(EditorCurveBinding binding)
+        internal static string BindingKey(EditorCurveBinding binding)
         {
             return binding.path + "|" + (binding.type == null ? "" : binding.type.FullName) +
                 "|" + binding.propertyName + "|" + binding.isPPtrCurve + "|" + binding.isDiscreteCurve;
@@ -699,14 +714,14 @@ namespace URflow
             return string.IsNullOrEmpty(current) ? addition : current + "\n" + addition;
         }
 
-        private static string FriendlyError(Exception exception)
+        internal static string FriendlyError(Exception exception)
         {
             while (exception is TargetInvocationException && exception.InnerException != null)
                 exception = exception.InnerException;
             return string.IsNullOrEmpty(exception.Message) ? "无法完成对齐操作，请重新刷新。" : exception.Message;
         }
 
-        private static void RethrowExitGUI(Exception exception)
+        internal static void RethrowExitGUI(Exception exception)
         {
             Exception current = exception;
             while (current != null)

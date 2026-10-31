@@ -9,6 +9,8 @@ namespace URflow
     {
         private readonly Action _repaint;
         private readonly Action _onApplied;
+        private readonly URflowKeyframeMoveScanPanel _scanPanel;
+        private bool _batchMode;
         private URflowKeyframeMoveAnchor _anchor = URflowKeyframeMoveAnchor.Last;
         private URflowKeyframeMoveMode _mode = URflowKeyframeMoveMode.Translate;
         private URflowKeyframeMovePreview _preview;
@@ -22,15 +24,22 @@ namespace URflow
         internal Rect ActionsRect { get; private set; }
         internal Rect CloseRect { get; private set; }
         internal Rect BodyRect { get; private set; }
+        internal Rect SelectedTabRect { get; private set; }
+        internal Rect BatchTabRect { get; private set; }
 
         internal void SetLayoutSize(Vector2 size) { _layoutSize = size; }
 
         public URflowKeyframeMovePanel(Action repaint, Action onApplied = null)
-        { _repaint = repaint; _onApplied = onApplied; }
+        {
+            _repaint = repaint;
+            _onApplied = onApplied;
+            _scanPanel = new URflowKeyframeMoveScanPanel(repaint, onApplied);
+        }
 
         public void Refresh(bool clearNotice = false)
         {
             if (_pending || _disposed) return;
+            if (_batchMode) { _scanPanel.Refresh(clearNotice); return; }
             if (clearNotice) _notice = null;
             _pending = true;
             _preview = null;
@@ -110,8 +119,18 @@ namespace URflow
                 CloseRect = new Rect(width - 42f, 12f, 26f, 24f);
                 if (GUI.Button(CloseRect, new GUIContent("×", text("Close", "关闭")), closeButton)) close();
                 EditorGUI.DrawRect(new Rect(0f, 50f, width, 1f), URflowVisuals.Divider);
+                float tabWidth = (width - 36f) * .5f;
+                SelectedTabRect = new Rect(16f, 62f, tabWidth, 28f);
+                BatchTabRect = new Rect(20f + tabWidth, 62f, tabWidth, 28f);
+                using (new EditorGUI.DisabledScope(_pending || _scanPanel.IsPending))
+                {
+                    if (GUI.Button(SelectedTabRect, text("Selected", "选中属性"), _batchMode ? secondaryButton : selectedButton)
+                        && _batchMode) SwitchMode(false);
+                    if (GUI.Button(BatchTabRect, text("Batch Scan", "批量检查"), _batchMode ? selectedButton : secondaryButton)
+                        && !_batchMode) SwitchMode(true);
+                }
                 // Only this viewport can grow/scroll. Header and actions stay inside the sheet.
-                Rect body = new Rect(0f, 51f, width, Mathf.Max(0f, height - 113f));
+                Rect body = new Rect(0f, 98f, width, Mathf.Max(0f, height - 160f));
                 BodyRect = body;
                 GUILayout.BeginArea(body);
                 try
@@ -126,18 +145,25 @@ namespace URflow
                 finally { GUILayout.EndArea(); }
                 EditorGUI.DrawRect(new Rect(0f, height - 62f, width, 1f), URflowVisuals.Divider);
                 ActionsRect = new Rect(16f, height - 46f, width - 32f, 34f);
-                using (new EditorGUI.DisabledScope(_pending))
+                using (new EditorGUI.DisabledScope(_pending || _scanPanel.IsPending))
                 {
-                    if (GUI.Button(new Rect(ActionsRect.x, ActionsRect.y, 68f, 34f), text("Refresh", "刷新"), secondaryButton))
+                    if (GUI.Button(new Rect(ActionsRect.x, ActionsRect.y, 68f, 34f),
+                        _batchMode ? text("Rescan", "扫描") : text("Refresh", "刷新"), secondaryButton))
                     {
                         _modifiedCount = null;
                         Refresh(true);
                     }
                 }
-                using (new EditorGUI.DisabledScope(_pending || _preview == null || !_preview.IsValid))
+                bool canApply = _batchMode ? _scanPanel.CanApply : !_pending && _preview != null && _preview.IsValid;
+                using (new EditorGUI.DisabledScope(!canApply))
                 {
                     if (GUI.Button(new Rect(ActionsRect.x + 72f, ActionsRect.y, ActionsRect.width - 72f, 34f),
-                        text("Apply Move", "应用移动"), primaryButton)) Apply();
+                        _batchMode ? text("Apply", "应用") + " (" + _scanPanel.SelectedCount + ")" :
+                            text("Apply Move", "应用移动"), primaryButton))
+                    {
+                        if (_batchMode) _scanPanel.Apply();
+                        else Apply();
+                    }
                 }
             }
             finally { GUI.color = oldColor; GUI.enabled = oldEnabled; }
@@ -145,6 +171,20 @@ namespace URflow
 
         private void DrawBody(GUIStyle button, GUIStyle selected, Func<string, string, string> text)
         {
+            if (_batchMode)
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    GUILayout.Space(16f);
+                    using (new EditorGUILayout.VerticalScope())
+                    {
+                        GUILayout.Space(12f);
+                        _scanPanel.DrawBody(button, text);
+                    }
+                    GUILayout.Space(16f);
+                }
+                return;
+            }
             using (new EditorGUILayout.HorizontalScope())
             {
                 GUILayout.Space(16f);
@@ -316,10 +356,22 @@ namespace URflow
 
         private static string Number(float value) { return value.ToString("G6", CultureInfo.InvariantCulture); }
 
+        private void SwitchMode(bool batchMode)
+        {
+            _batchMode = batchMode;
+            _scroll = Vector2.zero;
+            _preview = null;
+            _modifiedCount = null;
+            Refresh(true);
+            GUI.FocusControl(null);
+            GUIUtility.ExitGUI();
+        }
+
         public void Dispose()
         {
             _disposed = true;
             EditorApplication.delayCall -= ReadPreview;
+            _scanPanel.Dispose();
         }
     }
 }
