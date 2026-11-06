@@ -162,7 +162,11 @@ namespace URflow
                     DrawTitleOverlay();
                     using (new EditorGUI.DisabledScope(blockBackground))
                     {
-                        if (blockBackground) GUI.color *= new Color(0.55f, 0.55f, 0.55f, 1f);
+                        if (blockBackground)
+                        {
+                            float dim = Mathf.Lerp(1f, 0.55f, _toolsHost.PanelOpacity);
+                            GUI.color *= new Color(dim, dim, dim, 1f);
+                        }
                         DrawCurveEditor();
                         EditorGUILayout.Space(4);
                         DrawParams();

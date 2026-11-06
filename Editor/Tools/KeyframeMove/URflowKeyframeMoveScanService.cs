@@ -11,6 +11,7 @@ namespace URflow
         private readonly List<URflowKeyframeMoveScanRow> _rows = new List<URflowKeyframeMoveScanRow>();
         public AnimationClip Clip { get; internal set; }
         public GameObject Root { get; internal set; }
+        public URflowKeyframeMoveAnchor Anchor { get; internal set; }
         public URflowKeyframeMoveMode Mode { get; internal set; }
         public IReadOnlyList<URflowKeyframeMoveScanRow> Rows { get; private set; }
         public bool IsValid { get; internal set; }
@@ -44,7 +45,7 @@ namespace URflow
         public bool HasDifference
         {
             get { return AnchorValue.HasValue && StaticValue.HasValue &&
-                !AnchorValue.Value.Equals(StaticValue.Value); }
+                !URflowKeyframeMoveScanService.ValuesAligned(Binding, AnchorValue.Value, StaticValue.Value); }
         }
         public bool CanApply
         {
@@ -64,9 +65,20 @@ namespace URflow
         public static bool TryCreatePreview(URflowKeyframeMoveMode mode,
             out URflowKeyframeMoveScanPreview preview, out string error)
         {
+            return TryCreatePreview(URflowKeyframeMoveAnchor.Last, mode, out preview, out error);
+        }
+
+        public static bool TryCreatePreview(URflowKeyframeMoveAnchor anchor, URflowKeyframeMoveMode mode,
+            out URflowKeyframeMoveScanPreview preview, out string error)
+        {
             preview = null;
             error = null;
             if (!URflowKeyframeMoveService.CanOperate(out error)) return false;
+            if (anchor != URflowKeyframeMoveAnchor.First && anchor != URflowKeyframeMoveAnchor.Last)
+            {
+                error = "不支持该对齐基准。";
+                return false;
+            }
             if (mode != URflowKeyframeMoveMode.Translate && mode != URflowKeyframeMoveMode.Proportional)
             {
                 error = "不支持该批量调整模式。";
@@ -77,7 +89,7 @@ namespace URflow
                 URflowKeyframeMoveService.Context context = URflowKeyframeMoveService.CaptureContext(null, true);
                 preview = new URflowKeyframeMoveScanPreview
                 {
-                    Clip = context.Clip, Root = context.Root, Mode = mode,
+                    Clip = context.Clip, Root = context.Root, Anchor = anchor, Mode = mode,
                     Window = context.Window,
                     CandidateKeys = URflowKeyframeMoveService.BindingKeys(context.Bindings)
                 };
@@ -110,7 +122,7 @@ namespace URflow
                                 continue;
                             }
                             row.SourceCurve = URflowKeyframeMoveService.CloneCurve(curve);
-                            row.AnchorValue = curve.keys[curve.length - 1].value;
+                            row.AnchorValue = curve.keys[anchor == URflowKeyframeMoveAnchor.First ? 0 : curve.length - 1].value;
                             float value;
                             string readError;
                             if (!URflowKeyframeMoveService.TryReadStaticValue(context.Root, binding, out value, out readError))
@@ -122,8 +134,11 @@ namespace URflow
                             row.StaticSnapshot = value;
                             URflowKeyframeMoveMathResult result;
                             string mathError;
-                            if (!URflowKeyframeMoveMath.TryBuildCurve(curve, value,
-                                URflowKeyframeMoveAnchor.Last, mode, out result, out mathError))
+                            // A within-allowance endpoint is a no-op, including a near-zero
+                            // proportional anchor. Do not manufacture an error for float noise.
+                            float mathTarget = row.HasDifference ? value : row.AnchorValue.Value;
+                            if (!URflowKeyframeMoveMath.TryBuildCurve(curve, mathTarget,
+                                anchor, mode, out result, out mathError))
                             {
                                 row.Error = mathError;
                                 continue;
@@ -209,9 +224,10 @@ namespace URflow
                             URflowKeyframeMoveMathResult rebuilt;
                             string mathError;
                             if (!URflowKeyframeMoveMath.TryBuildCurve(current, value,
-                                URflowKeyframeMoveAnchor.Last, preview.Mode, out rebuilt, out mathError))
+                                preview.Anchor, preview.Mode, out rebuilt, out mathError))
                                 throw new InvalidOperationException("无法应用勾选属性：" + mathError);
-                            if (row.Result == null || !URflowKeyframeMoveService.CurvesEqual(rebuilt.Curve, row.Result.Curve))
+                            if (row.Result == null || row.Result.Anchor != preview.Anchor || row.Result.Mode != preview.Mode ||
+                                !URflowKeyframeMoveService.CurvesEqual(rebuilt.Curve, row.Result.Curve))
                                 throw new InvalidOperationException("扫描预览结果已改变，请重新扫描。");
                             if (!rebuilt.HasChanges) continue;
                             bindings.Add(row.Binding);
@@ -241,6 +257,9 @@ namespace URflow
         private static void ValidatePreviewContext(
             URflowKeyframeMoveService.Context context, URflowKeyframeMoveScanPreview preview)
         {
+            if ((preview.Anchor != URflowKeyframeMoveAnchor.First && preview.Anchor != URflowKeyframeMoveAnchor.Last) ||
+                (preview.Mode != URflowKeyframeMoveMode.Translate && preview.Mode != URflowKeyframeMoveMode.Proportional))
+                throw new InvalidOperationException("扫描预览结果已改变，请重新扫描。");
             if (!context.ScanAll || context.Window != preview.Window || context.Clip != preview.Clip ||
                 context.Root != preview.Root ||
                 !KeysEqual(URflowKeyframeMoveService.BindingKeys(context.Bindings), preview.CandidateKeys))
@@ -249,6 +268,56 @@ namespace URflow
             foreach (URflowKeyframeMoveScanRow row in preview.Rows) bindings.Add(row.Binding);
             if (!KeysEqual(URflowKeyframeMoveService.BindingKeys(bindings), preview.CandidateKeys))
                 throw new InvalidOperationException("扫描候选列表已改变，请重新扫描。");
+        }
+
+        // Filtering alone uses a small absolute allowance for float serialization/reading noise.
+        // Stale snapshots and atomic write verification deliberately keep exact comparisons.
+        internal static bool ValuesAligned(EditorCurveBinding binding, float anchor, float target)
+        {
+            if (float.IsNaN(anchor) || float.IsInfinity(anchor) || float.IsNaN(target) || float.IsInfinity(target))
+                return false;
+            double tolerance = (binding.propertyName ?? string.Empty).StartsWith("m_LocalScale.", StringComparison.Ordinal)
+                ? 0.000001d : 0.0001d;
+            return Math.Abs((double)target - anchor) <= tolerance;
+        }
+
+        // UI selection is an optional view filter. Empty selection must return no keys,
+        // and reading it must never alter the full scan's application scope or validity.
+        internal static bool TryGetSelectedBindingKeys(URflowKeyframeMoveScanPreview preview,
+            out List<string> keys, out string error)
+        {
+            keys = new List<string>();
+            error = null;
+            if (!URflowKeyframeMoveService.CanOperate(out error)) return false;
+            if (preview == null || !preview.IsValid)
+            {
+                error = "请先扫描当前片段，再筛选选中属性。";
+                return false;
+            }
+            try
+            {
+                URflowKeyframeMoveService.Context context =
+                    URflowKeyframeMoveService.CaptureContext(preview.Window, true);
+                ValidatePreviewContext(context, preview);
+                List<EditorCurveBinding> selected = URflowKeyframeMoveService.ReadSelectedBindings(
+                    context.Window, context.State, context.Clip, true);
+                var supported = new List<EditorCurveBinding>();
+                foreach (EditorCurveBinding binding in selected)
+                {
+                    string unsupported;
+                    if (URflowKeyframeMoveService.IsSupportedBinding(binding, out unsupported) &&
+                        preview.CandidateKeys.Contains(URflowKeyframeMoveService.BindingKey(binding)))
+                        supported.Add(binding);
+                }
+                keys = URflowKeyframeMoveService.BindingKeys(supported);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                URflowKeyframeMoveService.RethrowExitGUI(exception);
+                error = URflowKeyframeMoveService.FriendlyError(exception);
+                return false;
+            }
         }
 
         private static bool KeysEqual(List<string> left, List<string> right)

@@ -8,6 +8,7 @@ namespace URflow
     // Navigation belongs to the host; animation data belongs to the tool service.
     internal sealed class URflowToolsHost : IDisposable
     {
+        private const float PanelCloseSeconds = 0.28f;
         private sealed class ToolEntry
         {
             public readonly string English;
@@ -41,6 +42,7 @@ namespace URflow
         internal Rect FirstToolRect { get; private set; }
         internal Rect PanelRect { get; private set; }
         internal float PanelProgress { get { return _progress; } }
+        internal float PanelOpacity { get { return _progress; } }
         internal Rect PanelActionsRect { get { return OffsetPanelRect(_panel.ActionsRect); } }
         internal Rect PanelCloseRect { get { return OffsetPanelRect(_panel.CloseRect); } }
         internal Rect PanelBodyRect { get { return OffsetPanelRect(_panel.BodyRect); } }
@@ -176,6 +178,14 @@ namespace URflow
             PanelRect = new Rect(area.x + sheet.x, area.y + sheet.y, sheet.width, sheet.height);
             _panel.SetLayoutSize(sheet.size);
             Rect animationClip = new Rect(area.x, area.y, area.width, area.height + 24f);
+            Color previousColor = GUI.color;
+            EventType previousEventType = Event.current.type;
+            bool hideClosingInput = !_open.target && previousEventType != EventType.Layout &&
+                previousEventType != EventType.Repaint;
+            // A closing sheet remains visible until its alpha reaches zero. Ignore input
+            // without dimming its controls, so disabling interaction does not cause a flash.
+            if (hideClosingInput) Event.current.type = EventType.Ignore;
+            GUI.color = previousColor * new Color(1f, 1f, 1f, _progress);
             GUI.BeginGroup(animationClip);
             try
             {
@@ -202,7 +212,12 @@ namespace URflow
                 { _panelError = exception.Message; Repaint(); GUIUtility.ExitGUI(); }
                 finally { GUILayout.EndArea(); }
             }
-            finally { GUI.EndGroup(); }
+            finally
+            {
+                GUI.EndGroup();
+                GUI.color = previousColor;
+                if (hideClosingInput) Event.current.type = previousEventType;
+            }
         }
 
         private void BeginTransition(bool target)
@@ -239,8 +254,13 @@ namespace URflow
         {
             if (!_transitioning) return;
             float elapsed = (float)(EditorApplication.timeSinceStartup - _transitionStarted);
-            float t = Mathf.Clamp01(elapsed / URflowVisuals.PanelOpenSeconds);
-            float eased = CubicBezierConverter.Evaluate(0.2f, 0.75f, 0.3f, 1f, t);
+            float duration = _transitionTarget ? URflowVisuals.PanelOpenSeconds : PanelCloseSeconds;
+            float t = Mathf.Clamp01(elapsed / duration);
+            // Keep the approved opening curve. Closing uses a symmetric ease-in/out
+            // with opacity, rather than the opening's rapid ease-out followed by a cut.
+            float eased = _transitionTarget
+                ? CubicBezierConverter.Evaluate(0.2f, 0.75f, 0.3f, 1f, t)
+                : Mathf.SmoothStep(0f, 1f, t);
             _progress = Mathf.Lerp(_transitionFrom, _transitionTarget ? 1f : 0f, eased);
             if (t >= 1f)
             {
@@ -264,7 +284,9 @@ namespace URflow
         private void Close()
         {
             BeginTransition(false);
+            _panel.CancelPending();
             GUI.FocusControl(null);
+            GUIUtility.hotControl = 0;
             Repaint();
         }
 

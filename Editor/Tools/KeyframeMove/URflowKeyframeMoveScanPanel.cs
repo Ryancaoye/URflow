@@ -13,7 +13,11 @@ namespace URflow
         private readonly Action _onApplied;
         private readonly HashSet<URflowKeyframeMoveScanRow> _selected = new HashSet<URflowKeyframeMoveScanRow>();
         private URflowKeyframeMoveMode _mode = URflowKeyframeMoveMode.Translate;
+        private URflowKeyframeMoveAnchor _anchor = URflowKeyframeMoveAnchor.Last;
         private URflowKeyframeMoveScanPreview _preview;
+        private readonly HashSet<string> _selectionKeys = new HashSet<string>(StringComparer.Ordinal);
+        private bool _selectionOnly;
+        private string _selectionError;
         private string _search = string.Empty;
         private bool _differencesOnly = true;
         private string _error;
@@ -25,6 +29,11 @@ namespace URflow
 
         internal bool IsPending { get { return _pending; } }
         internal int SelectedCount { get { return _selected.Count; } }
+        internal Rect FirstAnchorRect { get; private set; }
+        internal Rect LastAnchorRect { get; private set; }
+        internal Rect RatioRect { get; private set; }
+        internal Rect SelectionOnlyRect { get; private set; }
+        internal Rect DifferencesOnlyRect { get; private set; }
         internal bool CanApply
         {
             get { return !_disposed && !_pending && _preview != null && _preview.IsValid && _selected.Count > 0; }
@@ -50,7 +59,8 @@ namespace URflow
             if (_disposed) return;
             try
             {
-                URflowKeyframeMoveScanService.TryCreatePreview(_mode, out _preview, out _error);
+                URflowKeyframeMoveScanService.TryCreatePreview(_anchor, _mode, out _preview, out _error);
+                CaptureSelection();
                 if (_preview != null && !string.IsNullOrEmpty(_preview.Notice)) _notice = _preview.Notice;
             }
             catch (ExitGUIException) { throw; }
@@ -58,10 +68,30 @@ namespace URflow
             finally { _pending = false; _repaint(); }
         }
 
+        private void CaptureSelection()
+        {
+            _selectionKeys.Clear();
+            _selectionError = null;
+            if (!_selectionOnly || _preview == null || !_preview.IsValid) return;
+            List<string> keys;
+            if (URflowKeyframeMoveScanService.TryGetSelectedBindingKeys(_preview, out keys, out _selectionError))
+                foreach (string key in keys) _selectionKeys.Add(key);
+        }
+
+        private void ReadSelection()
+        {
+            if (_disposed) return;
+            try { CaptureSelection(); }
+            catch (ExitGUIException) { throw; }
+            catch (Exception exception) { _selectionError = exception.Message; _selectionKeys.Clear(); }
+            finally { _pending = false; _repaint(); }
+        }
+
         public void Apply()
         {
             if (!CanApply) return;
             URflowKeyframeMoveScanPreview plan = _preview;
+            bool selectionOnly = _selectionOnly;
             // Freeze the explicit check list before leaving OnGUI, including hidden checked rows.
             var rows = new List<URflowKeyframeMoveScanRow>();
             foreach (URflowKeyframeMoveScanRow row in plan.Rows)
@@ -74,6 +104,19 @@ namespace URflow
                 bool applied = false;
                 try
                 {
+                    if (selectionOnly)
+                    {
+                        List<string> currentKeys;
+                        if (!URflowKeyframeMoveScanService.TryGetSelectedBindingKeys(plan, out currentKeys, out _error)) return;
+                        var currentSelection = new HashSet<string>(currentKeys, StringComparer.Ordinal);
+                        foreach (URflowKeyframeMoveScanRow row in rows)
+                            if (!currentSelection.Contains(URflowKeyframeMoveService.BindingKey(row.Binding)))
+                            {
+                                _error = "Animation 属性选择已改变，请重新扫描。";
+                                _selected.Clear();
+                                return;
+                            }
+                    }
                     int count;
                     if (URflowKeyframeMoveScanService.TryApply(plan, rows, out count, out _error))
                     {
@@ -103,14 +146,32 @@ namespace URflow
             _repaint();
         }
 
-        public void DrawBody(GUIStyle button, Func<string, string, string> text)
+        public void DrawBody(GUIStyle button, GUIStyle selected, Func<string, string, string> text)
         {
-            GUILayout.Label(text("CURRENT CLIP · LAST FRAME", "当前片段 · 尾帧对齐"), SectionLabel());
-            GUILayout.Space(5f);
+            GUILayout.Label(text("ALIGN TO", "对齐基准"), SectionLabel());
+            GUILayout.Space(4f);
             using (new EditorGUI.DisabledScope(_pending))
             {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    if (GUILayout.Button(text("First Frame", "首帧"),
+                        _anchor == URflowKeyframeMoveAnchor.First ? selected : button,
+                        GUILayout.Height(32f), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true))
+                        && _anchor != URflowKeyframeMoveAnchor.First)
+                    { _anchor = URflowKeyframeMoveAnchor.First; Refresh(true); GUIUtility.ExitGUI(); }
+                    FirstAnchorRect = GUILayoutUtility.GetLastRect();
+                    GUILayout.Space(4f);
+                    if (GUILayout.Button(text("Last Frame", "尾帧"),
+                        _anchor == URflowKeyframeMoveAnchor.Last ? selected : button,
+                        GUILayout.Height(32f), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true))
+                        && _anchor != URflowKeyframeMoveAnchor.Last)
+                    { _anchor = URflowKeyframeMoveAnchor.Last; Refresh(true); GUIUtility.ExitGUI(); }
+                    LastAnchorRect = GUILayoutUtility.GetLastRect();
+                }
+                GUILayout.Space(6f);
                 bool ratio = EditorGUILayout.ToggleLeft(text("Proportional adjustment", "按比例调整"),
                     _mode == URflowKeyframeMoveMode.Proportional, Label(), GUILayout.Height(20f));
+                RatioRect = GUILayoutUtility.GetLastRect();
                 if (ratio != (_mode == URflowKeyframeMoveMode.Proportional))
                 {
                     _mode = ratio ? URflowKeyframeMoveMode.Proportional : URflowKeyframeMoveMode.Translate;
@@ -130,11 +191,30 @@ namespace URflow
                 if (search != _search) { _search = search; GUIUtility.ExitGUI(); }
                 bool differencesOnly = EditorGUILayout.ToggleLeft(text("Differences only", "只看差异"),
                     _differencesOnly, Label(), GUILayout.Height(20f));
+                DifferencesOnlyRect = GUILayoutUtility.GetLastRect();
                 if (differencesOnly != _differencesOnly) { _differencesOnly = differencesOnly; GUIUtility.ExitGUI(); }
+                bool selectionOnly = EditorGUILayout.ToggleLeft(new GUIContent(
+                    text("Only Animation selection", "只看 Animation 选中属性"),
+                    text("Show the current selected position/scale properties. Rescan after changing selection. Changing this scope clears checks.",
+                        "仅显示 Animation 选中的位置／缩放属性；改变属性选择后请重新扫描。切换此范围会清空勾选。")),
+                    _selectionOnly, Label(), GUILayout.Height(20f));
+                SelectionOnlyRect = GUILayoutUtility.GetLastRect();
+                if (selectionOnly != _selectionOnly)
+                {
+                    _selectionOnly = selectionOnly;
+                    _selected.Clear();
+                    _selectionKeys.Clear();
+                    _selectionError = null;
+                    _pending = true;
+                    EditorApplication.delayCall += ReadSelection;
+                    _repaint();
+                    GUIUtility.ExitGUI();
+                }
             }
             GUILayout.Space(6f);
             if (_pending) GUILayout.Label(text("Scanning static values…", "正在扫描静态值…"), Label(false, true, true));
             if (!string.IsNullOrEmpty(_error)) EditorGUILayout.HelpBox(Message(_error, text), MessageType.Warning);
+            if (!string.IsNullOrEmpty(_selectionError)) EditorGUILayout.HelpBox(Message(_selectionError, text), MessageType.Warning);
             if (_preview != null)
             {
                 string context = (_preview.Root != null ? _preview.Root.name : "") + " / " +
@@ -165,8 +245,11 @@ namespace URflow
                         Label(false, true, true), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
                 GUILayout.Space(7f);
                 if (visible.Count == 0)
-                    GUILayout.Label(text("No matching differences. Clear search or show all properties.",
-                        "没有符合筛选条件的差异。可清空搜索或显示全部属性。"), Label(false, true, true),
+                    GUILayout.Label(_selectionOnly && _selectionKeys.Count == 0
+                        ? text("No selected position or scale properties. Select properties in Animation, then rescan.",
+                            "没有选中的位置或缩放属性。请在 Animation 选中属性后重新扫描。")
+                        : text("No matching differences. Clear search or show all properties.",
+                            "没有符合筛选条件的差异。可清空搜索或显示全部属性。"), Label(false, true, true),
                         GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
                 else DrawGroups(visible, text);
             }
@@ -185,12 +268,15 @@ namespace URflow
         {
             int differences = 0;
             int unavailable = 0;
+            int total = 0;
             foreach (URflowKeyframeMoveScanRow row in _preview.Rows)
             {
+                if (_selectionOnly && !_selectionKeys.Contains(URflowKeyframeMoveService.BindingKey(row.Binding))) continue;
+                total++;
                 if (row.HasDifference) differences++;
                 if (!string.IsNullOrEmpty(row.Error) || row.Result == null) unavailable++;
             }
-            GUILayout.Label(text("Total ", "共 ") + _preview.Rows.Count + "  ·  " +
+            GUILayout.Label(text("Total ", "共 ") + total + "  ·  " +
                 text("Different ", "差异 ") + differences + "  ·  " + text("Unavailable ", "不可处理 ") + unavailable,
                 Label(false, true, true), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
         }
@@ -202,6 +288,7 @@ namespace URflow
             string query = (_search ?? string.Empty).Trim();
             foreach (URflowKeyframeMoveScanRow row in _preview.Rows)
             {
+                if (_selectionOnly && !_selectionKeys.Contains(URflowKeyframeMoveService.BindingKey(row.Binding))) continue;
                 // Always retain errors in the difference view, even if the default could not be read.
                 if (_differencesOnly && !row.HasDifference && string.IsNullOrEmpty(row.Error)) continue;
                 string haystack = (row.Label ?? "") + " " + row.Binding.path + " " +
@@ -291,14 +378,15 @@ namespace URflow
             GUI.Label(new Rect(line.xMax - 46f, line.y, 46f, 22f), rows.Count + text(" props", " 项"), count);
         }
 
-        private static void DrawColumns(Func<string, string, string> text)
+        private void DrawColumns(Func<string, string, string> text)
         {
             Rect line = GUILayoutUtility.GetRect(0f, 16f, GUILayout.ExpandWidth(true));
             float labelWidth = Mathf.Min(84f, line.width * .34f);
             float valueWidth = Mathf.Max(0f, (line.width - labelWidth) / 3f);
             GUIStyle label = SectionLabel();
             label.alignment = TextAnchor.MiddleRight;
-            GUI.Label(new Rect(line.x + labelWidth, line.y, valueWidth, 16f), text("TAIL", "尾帧"), label);
+            GUI.Label(new Rect(line.x + labelWidth, line.y, valueWidth, 16f),
+                _anchor == URflowKeyframeMoveAnchor.First ? text("FIRST", "首帧") : text("LAST", "尾帧"), label);
             GUI.Label(new Rect(line.x + labelWidth + valueWidth, line.y, valueWidth, 16f), text("STATIC", "默认"), label);
             GUI.Label(new Rect(line.x + labelWidth + valueWidth * 2f, line.y, valueWidth, 16f), text("DIFF", "差值"), label);
         }
@@ -331,6 +419,8 @@ namespace URflow
             if (!string.IsNullOrEmpty(row.Error))
                 GUILayout.Label(new GUIContent(Message(row.Error, text), row.Error), Label(false, true, true),
                     GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
+            else if (!row.HasDifference)
+                GUILayout.Label(text("Aligned", "已一致"), Label(false, false, true));
             if (row.Result != null && row.Result.IsZeroFactor)
                 GUILayout.Label(text("Factor 0 removes all motion on this property.", "倍率为 0：该属性的动画变化会归零。"),
                     WarningLabel(), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
@@ -377,6 +467,8 @@ namespace URflow
                     return text("The current clip has no position or scale curves to scan.", source);
                 case "不支持该批量调整模式。":
                     return text("This batch adjustment mode is not supported.", source);
+                case "不支持该对齐基准。":
+                    return text("This alignment anchor is not supported.", source);
                 case "请先扫描当前片段，再勾选要对齐的差异属性。":
                     return text("Scan the current clip, then check the differences to align.", source);
                 case "请勾选至少一项可处理的差异属性。":
@@ -398,6 +490,8 @@ namespace URflow
                     return text("The object, animation clip, or position/scale curves have changed. Rescan before applying.", source);
                 case "Animation 窗口的对象、动画或属性选择已经改变，请重新刷新。":
                     return text("The animation context has changed. Rescan before applying.", source);
+                case "Animation 属性选择已改变，请重新扫描。":
+                    return text("The Animation property selection has changed. Rescan before applying.", source);
                 case "Animation 窗口没有当前动画片段。":
                     return text("The Animation window has no active clip.", source);
                 case "请打开 Animation 窗口并选中要对齐的属性。":
@@ -423,7 +517,7 @@ namespace URflow
                 case "Unity 正在编译或导入资源，请稍后再试。":
                     return text("Unity is compiling or importing assets. Try again when it finishes.", source);
                 case "Proportional adjustment cannot use a zero anchor for a nonzero default value.":
-                    return text(source, "尾帧为 0、默认值非 0 时无法按比例调整，可取消比例选项使用整体平移。");
+                    return text(source, "基准帧为 0、默认值非 0 时无法按比例调整，可取消比例选项使用整体平移。");
                 case "The selected curve has no keyframes.":
                     return text(source, "该属性没有关键帧。");
                 case "The static default value must be finite.":
@@ -476,10 +570,17 @@ namespace URflow
         public void Dispose()
         {
             _disposed = true;
+            CancelPending();
+            _selected.Clear();
+        }
+
+        internal void CancelPending()
+        {
             EditorApplication.delayCall -= ReadPreview;
+            EditorApplication.delayCall -= ReadSelection;
             if (_applyCallback != null) EditorApplication.delayCall -= _applyCallback;
             _applyCallback = null;
-            _selected.Clear();
+            _pending = false;
         }
     }
 }

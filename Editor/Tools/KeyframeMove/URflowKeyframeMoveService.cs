@@ -318,8 +318,8 @@ namespace URflow
             return new List<EditorCurveBinding>(supported.Values);
         }
 
-        private static List<EditorCurveBinding> ReadSelectedBindings(
-            AnimationWindow window, object state, AnimationClip clip)
+        internal static List<EditorCurveBinding> ReadSelectedBindings(
+            AnimationWindow window, object state, AnimationClip clip, bool allowEmpty = false)
         {
             var hierarchySelection = new SortedDictionary<string, EditorCurveBinding>(StringComparer.Ordinal);
             IList nodes = GetMember(state, "selectedHierarchyNodes") as IList;
@@ -400,7 +400,7 @@ namespace URflow
 
             SortedDictionary<string, EditorCurveBinding> selected =
                 hierarchySelection.Count > 0 ? hierarchySelection : activeKeys;
-            if (selected.Count == 0)
+            if (selected.Count == 0 && !allowEmpty)
                 throw new InvalidOperationException("请在 Animation 窗口选中具体属性、属性组，或该属性的关键帧。不会自动处理整个动画片段。");
             return new List<EditorCurveBinding>(selected.Values);
         }

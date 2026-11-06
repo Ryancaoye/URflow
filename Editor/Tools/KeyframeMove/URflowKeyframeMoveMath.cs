@@ -143,7 +143,9 @@ namespace URflow
                 // Copying the whole struct retains weights, weightedMode and tangent-mode bits.
                 Keyframe key = originalKeys[i];
                 float newValue;
-                double value = mode == URflowKeyframeMoveMode.Proportional
+                // Store the requested endpoint exactly, so rescanning does not find
+                // a rounding remainder from multiplying by a proportional factor.
+                double value = i == anchorIndex ? targetValue : mode == URflowKeyframeMoveMode.Proportional
                     ? (double)key.value * amount
                     : TranslateValue(key.value, originalAnchorValue, targetValue);
                 if (!TryToFloat(value, out newValue))
