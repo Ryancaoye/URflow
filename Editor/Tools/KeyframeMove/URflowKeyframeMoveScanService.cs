@@ -34,6 +34,7 @@ namespace URflow
         public EditorCurveBinding Binding { get; internal set; }
         public string Label { get; internal set; }
         public string Error { get; internal set; }
+        public string LayoutNotice { get; internal set; }
         public float? AnchorValue { get; internal set; }
         public float? StaticValue { get; internal set; }
         public double? Delta
@@ -53,6 +54,7 @@ namespace URflow
         }
         internal AnimationCurve SourceCurve;
         internal float StaticSnapshot;
+        internal URflowKeyframeMoveService.RectLayoutSnapshot LayoutSnapshot;
     }
 
     /// <summary>
@@ -95,7 +97,7 @@ namespace URflow
                 };
                 if (context.Bindings.Count == 0)
                 {
-                    error = "当前动画片段没有可扫描的位置或缩放属性。";
+                    error = "当前动画片段没有可扫描的位置、缩放或 Size Delta 属性。";
                     return false;
                 }
                 URflowKeyframeMoveScanPreview captured = preview;
@@ -123,6 +125,15 @@ namespace URflow
                             }
                             row.SourceCurve = URflowKeyframeMoveService.CloneCurve(curve);
                             row.AnchorValue = curve.keys[anchor == URflowKeyframeMoveAnchor.First ? 0 : curve.length - 1].value;
+                            string layoutNotice;
+                            string layoutError;
+                            if (!URflowKeyframeMoveService.TryCaptureRectLayout(context.Root, context.Clip, binding,
+                                out row.LayoutSnapshot, out layoutNotice, out layoutError))
+                            {
+                                row.Error = layoutError;
+                                continue;
+                            }
+                            row.LayoutNotice = layoutNotice;
                             float value;
                             string readError;
                             if (!URflowKeyframeMoveService.TryReadStaticValue(context.Root, binding, out value, out readError))
@@ -205,7 +216,7 @@ namespace URflow
                         var bindings = new List<EditorCurveBinding>();
                         var curves = new List<AnimationCurve>();
                         // Validate every checked row before the first write.
-                        // Errors on unchecked rows never block eligible choices.
+                        // Independent unchecked rows do not block eligible choices.
                         foreach (URflowKeyframeMoveScanRow row in checkedRows)
                         {
                             string unsupported;
@@ -214,6 +225,8 @@ namespace URflow
                             AnimationCurve current = AnimationUtility.GetEditorCurve(context.Clip, row.Binding);
                             if (!URflowKeyframeMoveService.CurvesEqual(current, row.SourceCurve))
                                 throw new InvalidOperationException("勾选的动画曲线已改变，请重新扫描后再应用。");
+                            URflowKeyframeMoveService.ValidateRectLayoutSnapshot(context.Root, context.Clip,
+                                row.Binding, row.LayoutSnapshot);
                             float value;
                             string readError;
                             if (!URflowKeyframeMoveService.TryReadStaticValue(context.Root, row.Binding, out value, out readError))
@@ -233,6 +246,7 @@ namespace URflow
                             bindings.Add(row.Binding);
                             curves.Add(rebuilt.Curve);
                         }
+                        URflowKeyframeMoveService.ValidateRectLayoutPairs(context.Root, context.Clip, bindings, preview.Anchor);
                         if (bindings.Count == 0) return;
                         URflowKeyframeMoveService.WriteAtomically(context.Clip, bindings, curves);
                         changedCount = bindings.Count;
@@ -263,7 +277,7 @@ namespace URflow
             if (!context.ScanAll || context.Window != preview.Window || context.Clip != preview.Clip ||
                 context.Root != preview.Root ||
                 !KeysEqual(URflowKeyframeMoveService.BindingKeys(context.Bindings), preview.CandidateKeys))
-                throw new InvalidOperationException("当前对象、动画片段或位置/缩放属性集合已改变，请重新扫描。");
+                throw new InvalidOperationException("当前对象、动画片段或位置/缩放/Size Delta 属性集合已改变，请重新扫描。");
             var bindings = new List<EditorCurveBinding>();
             foreach (URflowKeyframeMoveScanRow row in preview.Rows) bindings.Add(row.Binding);
             if (!KeysEqual(URflowKeyframeMoveService.BindingKeys(bindings), preview.CandidateKeys))

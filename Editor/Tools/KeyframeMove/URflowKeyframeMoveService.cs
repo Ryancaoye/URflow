@@ -33,10 +33,12 @@ namespace URflow
         public EditorCurveBinding Binding { get; internal set; }
         public string Label { get; internal set; }
         public string Error { get; internal set; }
+        public string LayoutNotice { get; internal set; }
         public bool IsSupported { get; internal set; }
         public URflowKeyframeMoveMathResult Result { get; internal set; }
         internal AnimationCurve SourceCurve;
         internal float StaticValue;
+        internal URflowKeyframeMoveService.RectLayoutSnapshot LayoutSnapshot;
     }
 
     /// <summary>
@@ -58,6 +60,14 @@ namespace URflow
             public GameObject Root;
             public List<EditorCurveBinding> Bindings;
             public bool ScanAll;
+        }
+
+        internal sealed class RectLayoutSnapshot
+        {
+            public RectTransform Target;
+            public Vector2 AnchorMin;
+            public Vector2 AnchorMax;
+            public Vector2 Pivot;
         }
 
         private sealed class ClipSnapshot
@@ -120,6 +130,16 @@ namespace URflow
                                 continue;
                             }
                             row.SourceCurve = CloneCurve(curve);
+                            string layoutNotice;
+                            string layoutError;
+                            if (!TryCaptureRectLayout(context.Root, context.Clip, binding,
+                                out row.LayoutSnapshot, out layoutNotice, out layoutError))
+                            {
+                                row.Error = layoutError;
+                                valid = false;
+                                continue;
+                            }
+                            row.LayoutNotice = layoutNotice;
                             float staticValue;
                             string readError;
                             if (!TryReadStaticValue(context.Root, binding, out staticValue, out readError))
@@ -196,6 +216,7 @@ namespace URflow
                             AnimationCurve current = AnimationUtility.GetEditorCurve(context.Clip, row.Binding);
                             if (!CurvesEqual(current, row.SourceCurve))
                                 throw new InvalidOperationException("动画曲线已经改变，请重新刷新预览后再应用。");
+                            ValidateRectLayoutSnapshot(context.Root, context.Clip, row.Binding, row.LayoutSnapshot);
                             float value;
                             string readError;
                             if (!TryReadStaticValue(context.Root, row.Binding, out value, out readError))
@@ -213,6 +234,7 @@ namespace URflow
                             bindings.Add(row.Binding);
                             curves.Add(rebuilt.Curve);
                         }
+                        ValidateRectLayoutPairs(context.Root, context.Clip, bindings, preview.Anchor);
                         if (bindings.Count == 0) return;
                         WriteAtomically(context.Clip, bindings, curves);
                         changedCount = bindings.Count;
@@ -500,10 +522,12 @@ namespace URflow
             bool positionOrScale = IsAxis(property, "m_LocalPosition") || IsAxis(property, "m_LocalScale");
             bool anchored = binding.type == typeof(RectTransform) &&
                 (property == "m_AnchoredPosition.x" || property == "m_AnchoredPosition.y");
+            bool size = binding.type == typeof(RectTransform) &&
+                (property == "m_SizeDelta.x" || property == "m_SizeDelta.y");
             if (binding.isPPtrCurve || binding.isDiscreteCurve ||
-                !transform || (!positionOrScale && !anchored))
+                !transform || (!positionOrScale && !anchored && !size))
             {
-                error = "首版仅支持 Transform / RectTransform 的位置与缩放属性，请取消选择其他属性。";
+                error = "仅支持 Transform / RectTransform 的位置、缩放与 RectTransform Size Delta 属性，请取消选择其他属性。";
                 return false;
             }
             return true;
@@ -550,6 +574,10 @@ namespace URflow
                 flag = DrivenTransformProperties.AnchoredPositionY;
             else if (property == "m_LocalPosition.z")
                 flag = DrivenTransformProperties.AnchoredPositionZ;
+            else if (property == "m_SizeDelta.x")
+                flag = DrivenTransformProperties.SizeDeltaX;
+            else if (property == "m_SizeDelta.y")
+                flag = DrivenTransformProperties.SizeDeltaY;
             else if (property == "m_LocalScale.x")
                 flag = DrivenTransformProperties.ScaleX;
             else if (property == "m_LocalScale.y")
@@ -559,9 +587,166 @@ namespace URflow
             else return false;
             // Unity 2022.3 exposes drivenByObject publicly, but the per-axis
             // drivenProperties getter is internal. Fail closed if unavailable.
+            return IsDriven(rect, flag);
+        }
+
+        private static bool IsDriven(RectTransform rect, DrivenTransformProperties flags)
+        {
+            if (rect.drivenByObject == null) return false;
             object driven = GetMember(rect, "drivenProperties");
             return !(driven is DrivenTransformProperties) ||
-                (((DrivenTransformProperties)driven & flag) != 0);
+                (((DrivenTransformProperties)driven & flags) != 0);
+        }
+
+        private static bool TryGetRectLayoutAxis(EditorCurveBinding binding, out int axis, out bool size)
+        {
+            axis = -1;
+            size = false;
+            if (binding.type != typeof(Transform) && binding.type != typeof(RectTransform)) return false;
+            string property = binding.propertyName ?? string.Empty;
+            size = binding.type == typeof(RectTransform) && property.StartsWith("m_SizeDelta.", StringComparison.Ordinal);
+            bool position = property.StartsWith("m_LocalPosition.", StringComparison.Ordinal) ||
+                (binding.type == typeof(RectTransform) && property.StartsWith("m_AnchoredPosition.", StringComparison.Ordinal));
+            if (!position && !size) return false;
+            if (property.EndsWith(".x", StringComparison.Ordinal)) axis = 0;
+            else if (property.EndsWith(".y", StringComparison.Ordinal)) axis = 1;
+            return axis >= 0;
+        }
+
+        internal static bool TryCaptureRectLayout(GameObject root, AnimationClip clip,
+            EditorCurveBinding binding, out RectLayoutSnapshot snapshot, out string layoutNotice, out string error)
+        {
+            snapshot = null;
+            layoutNotice = string.Empty;
+            error = null;
+            int axis;
+            bool size;
+            if (!TryGetRectLayoutAxis(binding, out axis, out size)) return true;
+            var rect = AnimationUtility.GetAnimatedObject(root, binding) as RectTransform;
+            if (rect == null) return true; // Missing targets are reported by the static-value reader.
+            foreach (EditorCurveBinding candidate in AnimationUtility.GetCurveBindings(clip))
+            {
+                if (!string.Equals(candidate.path, binding.path, StringComparison.Ordinal)) continue;
+                string property = candidate.propertyName ?? string.Empty;
+                if ((candidate.type == typeof(RectTransform) || candidate.type == typeof(Transform)) &&
+                    (IsAxis(property, "m_AnchorMin") || IsAxis(property, "m_AnchorMax") || IsAxis(property, "m_Pivot")))
+                {
+                    error = "该对象的锚点或轴心有动画，无法按固定布局对齐位置或 Size Delta。";
+                    return false;
+                }
+            }
+            foreach (string property in new[] { "m_AnchorMin.x", "m_AnchorMin.y", "m_AnchorMax.x", "m_AnchorMax.y", "m_Pivot.x", "m_Pivot.y" })
+            {
+                if (!AnimationMode.IsPropertyAnimated(rect, property)) continue;
+                error = "该对象的锚点或轴心仍被其他动画预览驱动，无法可靠读取固定布局。";
+                return false;
+            }
+            Vector2 min = rect.anchorMin;
+            Vector2 max = rect.anchorMax;
+            Vector2 pivot = rect.pivot;
+            if (!FiniteVector(min) || !FiniteVector(max) || !FiniteVector(pivot))
+            {
+                error = "RectTransform 的锚点或轴心包含无效数值，无法对齐布局。";
+                return false;
+            }
+            DrivenTransformProperties basisFlags = axis == 0
+                ? DrivenTransformProperties.AnchorMinX | DrivenTransformProperties.AnchorMaxX | DrivenTransformProperties.PivotX
+                : DrivenTransformProperties.AnchorMinY | DrivenTransformProperties.AnchorMaxY | DrivenTransformProperties.PivotY;
+            if (IsDriven(rect, basisFlags))
+            {
+                error = "该轴的锚点或轴心由布局组件驱动，请先解除对应布局驱动再对齐。";
+                return false;
+            }
+            if (!min[axis].Equals(max[axis]))
+            {
+                string suffix = axis == 0 ? ".x" : ".y";
+                foreach (string property in new[] { "m_AnchoredPosition" + suffix, "m_LocalPosition" + suffix, "m_SizeDelta" + suffix })
+                {
+                    if (!AnimationMode.IsPropertyAnimated(rect, property)) continue;
+                    error = "该属性仍被其他动画预览驱动，无法可靠读取静态布局值。";
+                    return false;
+                }
+                DrivenTransformProperties pairFlags = axis == 0
+                    ? DrivenTransformProperties.AnchoredPositionX | DrivenTransformProperties.SizeDeltaX
+                    : DrivenTransformProperties.AnchoredPositionY | DrivenTransformProperties.SizeDeltaY;
+                if (IsDriven(rect, pairFlags))
+                {
+                    error = "拉伸轴的位置或尺寸由布局组件驱动，请先解除对应布局驱动再对齐。";
+                    return false;
+                }
+                layoutNotice = axis == 0
+                    ? "X 拉伸布局：Left / Right 由 UI 位置 X 和 Size Delta X 共同决定；两项有差异时请一起勾选。"
+                    : "Y 拉伸布局：Top / Bottom 由 UI 位置 Y 和 Size Delta Y 共同决定；两项有差异时请一起勾选。";
+            }
+            snapshot = new RectLayoutSnapshot { Target = rect, AnchorMin = min, AnchorMax = max, Pivot = pivot };
+            return true;
+        }
+
+        private static bool FiniteVector(Vector2 value)
+        {
+            return !float.IsNaN(value.x) && !float.IsInfinity(value.x) &&
+                !float.IsNaN(value.y) && !float.IsInfinity(value.y);
+        }
+
+        internal static void ValidateRectLayoutSnapshot(GameObject root, AnimationClip clip,
+            EditorCurveBinding binding, RectLayoutSnapshot snapshot)
+        {
+            RectLayoutSnapshot current;
+            string notice;
+            string error;
+            if (!TryCaptureRectLayout(root, clip, binding, out current, out notice, out error))
+                throw new InvalidOperationException(error);
+            if (current == null && snapshot == null) return;
+            if (current == null || snapshot == null || current.Target != snapshot.Target ||
+                !current.AnchorMin.Equals(snapshot.AnchorMin) || !current.AnchorMax.Equals(snapshot.AnchorMax) ||
+                !current.Pivot.Equals(snapshot.Pivot))
+                throw new InvalidOperationException("RectTransform 的锚点或轴心已经改变，请重新扫描或刷新预览。");
+        }
+
+        // Stretch margins depend on both position and Size Delta. Check the live
+        // counterpart outside Animation preview, but never add an unchecked track.
+        internal static void ValidateRectLayoutPairs(GameObject root, AnimationClip clip,
+            List<EditorCurveBinding> checkedBindings, URflowKeyframeMoveAnchor anchor)
+        {
+            var checkedKeys = new HashSet<string>(BindingKeys(checkedBindings), StringComparer.Ordinal);
+            EditorCurveBinding[] allBindings = AnimationUtility.GetCurveBindings(clip);
+            foreach (EditorCurveBinding binding in checkedBindings)
+            {
+                int axis;
+                bool size;
+                if (!TryGetRectLayoutAxis(binding, out axis, out size)) continue;
+                RectLayoutSnapshot layout;
+                string notice;
+                string error;
+                if (!TryCaptureRectLayout(root, clip, binding, out layout, out notice, out error))
+                    throw new InvalidOperationException(error);
+                if (layout == null || layout.AnchorMin[axis].Equals(layout.AnchorMax[axis])) continue;
+                foreach (EditorCurveBinding partner in allBindings)
+                {
+                    int partnerAxis;
+                    bool partnerSize;
+                    if (!string.Equals(partner.path, binding.path, StringComparison.Ordinal) ||
+                        !TryGetRectLayoutAxis(partner, out partnerAxis, out partnerSize) ||
+                        partnerAxis != axis || partnerSize == size) continue;
+                    string unsupported;
+                    float value;
+                    RectLayoutSnapshot partnerLayout;
+                    AnimationCurve curve = AnimationUtility.GetEditorCurve(clip, partner);
+                    if (!IsSupportedBinding(partner, out unsupported) || curve == null || curve.length == 0 ||
+                        !TryCaptureRectLayout(root, clip, partner, out partnerLayout, out notice, out error) ||
+                        !TryReadStaticValue(root, partner, out value, out error))
+                        throw new InvalidOperationException("拉伸布局的配对属性无法可靠读取或处理，请先修正该轴的位置或 Size Delta。");
+                    float endpoint = curve.keys[anchor == URflowKeyframeMoveAnchor.First ? 0 : curve.length - 1].value;
+                    URflowKeyframeMoveMathResult validation;
+                    string mathError;
+                    if (!URflowKeyframeMoveMath.TryBuildCurve(curve, endpoint, anchor,
+                        URflowKeyframeMoveMode.Translate, out validation, out mathError))
+                        throw new InvalidOperationException("拉伸布局的配对属性无法可靠读取或处理，请先修正该轴的位置或 Size Delta。");
+                    if (!URflowKeyframeMoveScanService.ValuesAligned(partner, endpoint, value) &&
+                        !checkedKeys.Contains(BindingKey(partner)))
+                        throw new InvalidOperationException("拉伸布局的同轴位置与尺寸需要一起对齐。请重新扫描，并同时勾选该轴的位置和 Size Delta 差异项。");
+                }
+            }
         }
 
         internal static void WriteAtomically(
@@ -703,6 +888,7 @@ namespace URflow
             string property = binding.propertyName ?? "";
             string axis = property.Length > 0 ? property.Substring(property.LastIndexOf('.') + 1).ToUpperInvariant() : "";
             string kind = property.StartsWith("m_LocalScale.", StringComparison.Ordinal) ? "缩放 " :
+                property.StartsWith("m_SizeDelta.", StringComparison.Ordinal) ? "UI 尺寸 " :
                 property.StartsWith("m_AnchoredPosition.", StringComparison.Ordinal) ? "UI 位置 " :
                 property.StartsWith("m_LocalPosition.", StringComparison.Ordinal) ? "位置 " : property;
             string path = string.IsNullOrEmpty(binding.path) ? "(根对象)" : binding.path;

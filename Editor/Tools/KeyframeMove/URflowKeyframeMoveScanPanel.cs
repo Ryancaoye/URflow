@@ -195,8 +195,8 @@ namespace URflow
                 if (differencesOnly != _differencesOnly) { _differencesOnly = differencesOnly; GUIUtility.ExitGUI(); }
                 bool selectionOnly = EditorGUILayout.ToggleLeft(new GUIContent(
                     text("Only Animation selection", "只看 Animation 选中属性"),
-                    text("Show the current selected position/scale properties. Rescan after changing selection. Changing this scope clears checks.",
-                        "仅显示 Animation 选中的位置／缩放属性；改变属性选择后请重新扫描。切换此范围会清空勾选。")),
+                    text("Show the current selected position, scale and Size Delta properties. Rescan after changing selection. Changing this scope clears checks.",
+                        "仅显示 Animation 选中的位置、缩放和 Size Delta 属性；改变属性选择后请重新扫描。切换此范围会清空勾选。")),
                     _selectionOnly, Label(), GUILayout.Height(20f));
                 SelectionOnlyRect = GUILayoutUtility.GetLastRect();
                 if (selectionOnly != _selectionOnly)
@@ -246,8 +246,8 @@ namespace URflow
                 GUILayout.Space(7f);
                 if (visible.Count == 0)
                     GUILayout.Label(_selectionOnly && _selectionKeys.Count == 0
-                        ? text("No selected position or scale properties. Select properties in Animation, then rescan.",
-                            "没有选中的位置或缩放属性。请在 Animation 选中属性后重新扫描。")
+                        ? text("No selected position, scale or Size Delta properties. Select properties in Animation, then rescan.",
+                            "没有选中的位置、缩放或 Size Delta 属性。请在 Animation 选中属性后重新扫描。")
                         : text("No matching differences. Clear search or show all properties.",
                             "没有符合筛选条件的差异。可清空搜索或显示全部属性。"), Label(false, true, true),
                         GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
@@ -421,6 +421,14 @@ namespace URflow
                     GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
             else if (!row.HasDifference)
                 GUILayout.Label(text("Aligned", "已一致"), Label(false, false, true));
+            if (!string.IsNullOrEmpty(row.LayoutNotice))
+                GUILayout.Label(new GUIContent(Message(row.LayoutNotice, text), row.LayoutNotice),
+                    Label(false, true, true), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
+            if (_mode == URflowKeyframeMoveMode.Proportional &&
+                row.Binding.propertyName.StartsWith("m_SizeDelta.", StringComparison.Ordinal))
+                GUILayout.Label(text("Scales Size Delta values; stretched width/height also depend on the parent and anchors.",
+                    "按比例调整 Size Delta 数值；拉伸后的实际宽高还取决于父级与锚点。"),
+                    Label(false, true, true), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
             if (row.Result != null && row.Result.IsZeroFactor)
                 GUILayout.Label(text("Factor 0 removes all motion on this property.", "倍率为 0：该属性的动画变化会归零。"),
                     WarningLabel(), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
@@ -455,6 +463,28 @@ namespace URflow
             {
                 case "当前界面中找不到该动画属性对应的对象。":
                     return text("The animated object could not be found in the current UI.", source);
+                case "仅支持 Transform / RectTransform 的位置、缩放与 RectTransform Size Delta 属性，请取消选择其他属性。":
+                    return text("Only Transform/RectTransform position, scale and RectTransform Size Delta are supported. Deselect other properties.", source);
+                case "该对象的锚点或轴心有动画，无法按固定布局对齐位置或 Size Delta。":
+                    return text("This object's anchors or pivot are animated. Position and Size Delta cannot be aligned against a fixed layout.", source);
+                case "该对象的锚点或轴心仍被其他动画预览驱动，无法可靠读取固定布局。":
+                    return text("Another animation preview drives this object's anchors or pivot; its fixed layout cannot be read reliably.", source);
+                case "RectTransform 的锚点或轴心包含无效数值，无法对齐布局。":
+                    return text("RectTransform anchors or pivot contain invalid values; layout alignment is unavailable.", source);
+                case "该轴的锚点或轴心由布局组件驱动，请先解除对应布局驱动再对齐。":
+                    return text("A layout component drives this axis's anchors or pivot. Remove that layout drive before aligning.", source);
+                case "拉伸轴的位置或尺寸由布局组件驱动，请先解除对应布局驱动再对齐。":
+                    return text("A layout component drives the stretched axis's position or size. Remove that layout drive before aligning.", source);
+                case "RectTransform 的锚点或轴心已经改变，请重新扫描或刷新预览。":
+                    return text("RectTransform anchors or pivot have changed. Rescan before applying.", source);
+                case "拉伸布局的配对属性无法可靠读取或处理，请先修正该轴的位置或 Size Delta。":
+                    return text("The stretched layout's paired property cannot be read or processed reliably. Correct this axis's position or Size Delta first.", source);
+                case "拉伸布局的同轴位置与尺寸需要一起对齐。请重新扫描，并同时勾选该轴的位置和 Size Delta 差异项。":
+                    return text("Align the stretched axis's position and size together. Rescan, then check both its position and Size Delta differences.", source);
+                case "X 拉伸布局：Left / Right 由 UI 位置 X 和 Size Delta X 共同决定；两项有差异时请一起勾选。":
+                    return text("Stretched X: Left/Right depend on UI Position X and Size Delta X. Check both when both differ.", source);
+                case "Y 拉伸布局：Top / Bottom 由 UI 位置 Y 和 Size Delta Y 共同决定；两项有差异时请一起勾选。":
+                    return text("Stretched Y: Top/Bottom depend on UI Position Y and Size Delta Y. Check both when both differ.", source);
                 case "该属性仍被其他动画预览驱动，无法可靠读取静态布局值。":
                     return text("Another animation preview still drives this property; its static value cannot be read reliably.", source);
                 case "该属性由布局组件驱动，请先解除对应布局驱动再对齐。":
@@ -464,7 +494,8 @@ namespace URflow
                 case "该属性没有可处理的关键帧。":
                     return text("This property has no keyframes to process.", source);
                 case "当前动画片段没有可扫描的位置或缩放属性。":
-                    return text("The current clip has no position or scale curves to scan.", source);
+                case "当前动画片段没有可扫描的位置、缩放或 Size Delta 属性。":
+                    return text("The current clip has no position, scale or Size Delta curves to scan.", source);
                 case "不支持该批量调整模式。":
                     return text("This batch adjustment mode is not supported.", source);
                 case "不支持该对齐基准。":
@@ -487,6 +518,7 @@ namespace URflow
                 case "扫描预览结果已改变，请重新扫描。":
                     return text("The scan preview has changed. Rescan before applying.", source);
                 case "当前对象、动画片段或位置/缩放属性集合已改变，请重新扫描。":
+                case "当前对象、动画片段或位置/缩放/Size Delta 属性集合已改变，请重新扫描。":
                     return text("The object, animation clip, or position/scale curves have changed. Rescan before applying.", source);
                 case "Animation 窗口的对象、动画或属性选择已经改变，请重新刷新。":
                     return text("The animation context has changed. Rescan before applying.", source);
@@ -563,6 +595,7 @@ namespace URflow
             string axis = name.Length > 0 ? name.Substring(name.LastIndexOf('.') + 1).ToUpperInvariant() : "";
             if (name.StartsWith("m_LocalScale.", StringComparison.Ordinal)) return text("Scale ", "缩放 ") + axis;
             if (name.StartsWith("m_AnchoredPosition.", StringComparison.Ordinal)) return text("UI Pos ", "UI 位置 ") + axis;
+            if (name.StartsWith("m_SizeDelta.", StringComparison.Ordinal)) return text("UI Size ", "UI 尺寸 ") + axis;
             if (name.StartsWith("m_LocalPosition.", StringComparison.Ordinal)) return text("Pos ", "位置 ") + axis;
             return name;
         }
