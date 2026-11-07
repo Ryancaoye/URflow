@@ -78,7 +78,7 @@ const doc = new Document({
         new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 100 }, children: [new TextRun({ text: "使用指南与更新记录", size: 28, color: "000000" })] }),
         new Paragraph({ spacing: { before: 1500 } }),
         new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Inspired by Flow for After Effects", size: 20, color: "000000", italics: true })] }),
-        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 100 }, children: [new TextRun({ text: "适用版本 v1.0.3  文档更新 2026-11-06", size: 22, color: "000000" })] }),
+        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 100 }, children: [new TextRun({ text: "适用版本 v1.0.3  文档更新 2026-11-07", size: 22, color: "000000" })] }),
         new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "功能建议与问题反馈 liuyiran02@corp.netease.com", size: 20, color: "555555" })] }),
       ]
     },
@@ -375,6 +375,21 @@ const doc = new Document({
         h3("本轮验证和保存"),
         p("本轮已实现并通过隔离验证：全部 17 个 Editor 源文件按 warning level 4、warnings as errors 严格编译，无诊断。独立 Unity 2022.3.56f1、Direct3D11 确认实际加载本轮 C: 暂存包；数学 19、原选中属性服务 19、扫描服务 44、旧主界面 30（330 次 SendEvent）、关闭动画 14（5 状态、9 原生事件）、统一页面 252（156 原生事件、96 状态）及排队应用后原生关闭取消 42（30 原生事件、12 状态），共 420 项检查通过。统一页面与关闭取消覆盖 320×560、320×820、480×720 及中英文。未取得整窗像素截图，制作工程的关闭体感和完整外观仍待用户试用；图 1 的原筛选状态及精确数值未实测复现，不将其根因写成已证实。本轮插件开发与验证没有手动修改 G: 制作工程。"),
         p("目标版本仍为未发布的 v1.0.4，正式版本字段保持 1.0.3。本轮代码保存于 feature/v1.0.4 的 e42a68b4baef1ab2ecdc46d3e5da7dd1b63f2a17，并已同步 D: 开发包；7 个修改源码文件的安装哈希与验证输入一致，原图标和资源 GUID 保留。教程与更新记录按对应文档提交保存，具体提交见 Git 历史。未合并稳定分支、推送、打标签或正式发布。"),
+
+        h2("2026年11月7日拉伸布局位置与尺寸对齐"),
+        p("用户发现垂直拉伸的 RectTransform 对齐后，默认 Top 50、Bottom 80 变成 Top 35、Bottom 65。本轮修复此前只纳入位置而遗漏 Size Delta 动画的支持范围；当前关键帧移动还需要考虑尺寸曲线。"),
+        h3("拉伸边距的关系"),
+        p("Top / Bottom 或 Left / Right 由 Anchored Position、Size Delta 和 Pivot 共同决定。Y 轴 Pivot 为 0.5 时，Top 50、Bottom 80 对应 Anchored Position Y 为 15、Size Delta Y 为 -130；位置对齐为 15 而尺寸仍为 -100，就会得到 Top 35、Bottom 65。截图中的 80 和 -160 未确定采样时间，不能据此声称它们是错误结果的同一尾帧。"),
+        h3("检查与勾选方式"),
+        p("统一页面增加 RectTransform 的 UI Size X / Y（Size Delta）曲线，和 UI Pos X / Y 一起显示基准帧值、静态默认值及差值。它们是尺寸偏移，不是 Scale。首帧、尾帧、整体平移及比例选项沿用当前操作；尺寸差异使用与位置相同的 0.0001 绝对容差。"),
+        p("拉伸轴的位置与尺寸都有差异时，请明确勾选同一对象、同一轴的两项再应用。例如垂直拉伸应同时勾选 UI Pos Y 和 UI Size Y。缺少配对差异项时整次应用拒绝写入并显示提示，不自动扩大勾选、不修改筛选外未勾选项。Only Animation selection 也不会暗中扩选配对。"),
+        p("同轴配对已经一致时可以只改仍有差异的一项；没有配对动画轨道时使用静态值，不创建新曲线。非拉伸轴的位置与 Size Delta 允许独立处理。其他轴、其他对象和未勾选曲线保持原状；一次 Undo / Redo 仍对应整批写入。"),
+        p("比例模式对 Size Delta 的原始数值计算倍率。实际宽高还包含父矩形与锚点跨度，因此这不代表界面的实际宽高按同一比例缩放。负 Size Delta 是合法布局数值；比例基准为零而目标非零时仍拒绝计算。曲线时间、关键帧数、切线模式、Broken、权重及 wrap mode 保留。"),
+        h3("布局驱动和过期结果"),
+        p("锚点或 Pivot 自身带有动画时，本轮不支持完整位置与尺寸对齐，相关行显示原因并禁止应用；Scale 行仍按原规则处理。自动布局驱动的尺寸与位置不作为可靠静态默认值。扫描后锚点、Pivot、勾选曲线或默认值发生变化时要求重新扫描，应用前在暂停当前预览的状态重新核对同轴配对。"),
+        h3("本轮验证和保存"),
+        p("本轮全部 17 个 Editor 源文件按 warning level 4、warnings as errors 严格编译通过，无诊断，冻结源哈希一致。独立 Unity 2022.3.56f1、Direct3D11 核对实际加载本轮 C: 暂存包；数学 19、原选中属性服务 19、扫描回归 44、统一页面 252（156 原生事件、96 状态）、新增拉伸布局服务 36 和新增拉伸布局界面 56（40 原生事件、16 状态），共 426 项检查通过。统一页面覆盖 320×560、320×820、480×720 及中英文，新增布局界面覆盖前两种尺寸及中英文。引擎中复现旧位置单独对齐的 35 / 65，新配对服务和原生勾选至 Apply 均恢复 50 / 80，原生 Undo 恢复整片段。未取得整窗像素截图，未在制作场景试用，也未复现原用户片段的精确采样时点。本轮没有手动写入 G: 制作工程。"),
+        p("目标版本仍为未发布的 v1.0.4，正式版本字段保持 1.0.3。本轮代码保存于 feature/v1.0.4 的 bacfc91507ca84c5358d91833a7bdfc2e8050e30，并已安装到 D: 开发包；3 个修改源码文件的安装哈希与测试暂存一致。教程和更新记录随对应文档提交保存，具体提交见 Git 历史。未修改稳定目录代码，未合并、推送、打标签或正式发布。"),
 
       ]
     }
