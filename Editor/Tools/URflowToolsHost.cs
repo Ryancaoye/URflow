@@ -171,7 +171,8 @@ namespace URflow
             if (GUI.enabled && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Escape)
             { Close(); Event.current.Use(); }
 
-            float height = Mathf.Min(420f, area.height);
+            // Open up toward the graph in tall windows; retain a usable sheet in short ones.
+            float height = Mathf.Min(area.height, Mathf.Min(740f, Mathf.Max(420f, area.height - 178f)));
             UpdateProgress();
             // Match the approved preview: a subtle 24px rise, not a full-height slide.
             Rect sheet = new Rect(0f, area.height - height + 24f * (1f - _progress), area.width, height);

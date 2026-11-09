@@ -148,20 +148,20 @@ namespace URflow
 
         public void DrawBody(GUIStyle button, GUIStyle selected, Func<string, string, string> text)
         {
-            GUILayout.Label(text("ALIGN TO", "对齐基准"), SectionLabel());
-            GUILayout.Space(4f);
             using (new EditorGUI.DisabledScope(_pending))
             {
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    if (GUILayout.Button(text("First Frame", "首帧"),
+                    if (GUILayout.Button(new GUIContent(text("First Frame", "首帧"),
+                        text("Match the first keyframe to the static layout value.", "让首帧对齐静态布局值。")),
                         _anchor == URflowKeyframeMoveAnchor.First ? selected : button,
                         GUILayout.Height(32f), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true))
                         && _anchor != URflowKeyframeMoveAnchor.First)
                     { _anchor = URflowKeyframeMoveAnchor.First; Refresh(true); GUIUtility.ExitGUI(); }
                     FirstAnchorRect = GUILayoutUtility.GetLastRect();
                     GUILayout.Space(4f);
-                    if (GUILayout.Button(text("Last Frame", "尾帧"),
+                    if (GUILayout.Button(new GUIContent(text("Last Frame", "尾帧"),
+                        text("Match the last keyframe to the static layout value.", "让尾帧对齐静态布局值。")),
                         _anchor == URflowKeyframeMoveAnchor.Last ? selected : button,
                         GUILayout.Height(32f), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true))
                         && _anchor != URflowKeyframeMoveAnchor.Last)
@@ -169,7 +169,9 @@ namespace URflow
                     LastAnchorRect = GUILayoutUtility.GetLastRect();
                 }
                 GUILayout.Space(6f);
-                bool ratio = EditorGUILayout.ToggleLeft(text("Proportional adjustment", "按比例调整"),
+                bool ratio = EditorGUILayout.ToggleLeft(new GUIContent(text("Proportional", "按比例"),
+                    text("Scale every keyframe value by the same factor. When off, shift all values by the same amount.",
+                        "勾选时，所有关键帧数值按同一倍率调整；关闭时，所有数值整体平移。")),
                     _mode == URflowKeyframeMoveMode.Proportional, Label(), GUILayout.Height(20f));
                 RatioRect = GUILayoutUtility.GetLastRect();
                 if (ratio != (_mode == URflowKeyframeMoveMode.Proportional))
@@ -189,37 +191,41 @@ namespace URflow
                 }
                 finally { EditorGUIUtility.labelWidth = previousLabelWidth; }
                 if (search != _search) { _search = search; GUIUtility.ExitGUI(); }
-                bool differencesOnly = EditorGUILayout.ToggleLeft(text("Differences only", "只看差异"),
-                    _differencesOnly, Label(), GUILayout.Height(20f));
-                DifferencesOnlyRect = GUILayoutUtility.GetLastRect();
-                if (differencesOnly != _differencesOnly) { _differencesOnly = differencesOnly; GUIUtility.ExitGUI(); }
-                bool selectionOnly = EditorGUILayout.ToggleLeft(new GUIContent(
-                    text("Only Animation selection", "只看 Animation 选中属性"),
-                    text("Show the current selected position, scale and Size Delta properties. Rescan after changing selection. Changing this scope clears checks.",
-                        "仅显示 Animation 选中的位置、缩放和 Size Delta 属性；改变属性选择后请重新扫描。切换此范围会清空勾选。")),
-                    _selectionOnly, Label(), GUILayout.Height(20f));
-                SelectionOnlyRect = GUILayoutUtility.GetLastRect();
-                if (selectionOnly != _selectionOnly)
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    _selectionOnly = selectionOnly;
-                    _selected.Clear();
-                    _selectionKeys.Clear();
-                    _selectionError = null;
-                    _pending = true;
-                    EditorApplication.delayCall += ReadSelection;
-                    _repaint();
-                    GUIUtility.ExitGUI();
+                    bool differencesOnly = EditorGUILayout.ToggleLeft(new GUIContent(text("Differences", "只看差异"),
+                        text("Show changed or unavailable properties only.", "仅显示有差异或无法处理的属性。")),
+                        _differencesOnly, Label(), GUILayout.Height(20f), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
+                    DifferencesOnlyRect = GUILayoutUtility.GetLastRect();
+                    if (differencesOnly != _differencesOnly) { _differencesOnly = differencesOnly; GUIUtility.ExitGUI(); }
+                    bool selectionOnly = EditorGUILayout.ToggleLeft(new GUIContent(
+                        text("Animation selection", "Animation 选中项"),
+                        text("Show the selected position, scale and Size Delta properties in Animation. Rescan after changing selection. Changing this scope clears checks.",
+                            "仅显示 Animation 选中的位置、缩放和 Size Delta 属性；改变属性选择后请重新扫描。切换此范围会清空勾选。")),
+                        _selectionOnly, Label(), GUILayout.Height(20f), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
+                    SelectionOnlyRect = GUILayoutUtility.GetLastRect();
+                    if (selectionOnly != _selectionOnly)
+                    {
+                        _selectionOnly = selectionOnly;
+                        _selected.Clear();
+                        _selectionKeys.Clear();
+                        _selectionError = null;
+                        _pending = true;
+                        EditorApplication.delayCall += ReadSelection;
+                        _repaint();
+                        GUIUtility.ExitGUI();
+                    }
                 }
             }
             GUILayout.Space(6f);
-            if (_pending) GUILayout.Label(text("Scanning static values…", "正在扫描静态值…"), Label(false, true, true));
+            if (_pending) GUILayout.Label(text("Scanning…", "扫描中…"), Label(false, true, true));
             if (!string.IsNullOrEmpty(_error)) EditorGUILayout.HelpBox(Message(_error, text), MessageType.Warning);
             if (!string.IsNullOrEmpty(_selectionError)) EditorGUILayout.HelpBox(Message(_selectionError, text), MessageType.Warning);
             if (_preview != null)
             {
                 string context = (_preview.Root != null ? _preview.Root.name : "") + " / " +
                     (_preview.Clip != null ? _preview.Clip.name : "");
-                GUILayout.Label(new GUIContent(context, context), Label(true), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
+                GUILayout.Label(new GUIContent(_preview.Clip != null ? _preview.Clip.name : context, context), Label(true), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
                 DrawSummary(text);
                 GUILayout.Space(6f);
                 List<URflowKeyframeMoveScanRow> visible = VisibleRows(text);
@@ -227,40 +233,36 @@ namespace URflow
                 {
                     using (new EditorGUILayout.HorizontalScope())
                     {
-                        if (GUILayout.Button(new GUIContent(text("Select Visible", "勾选当前结果"),
+                        if (GUILayout.Button(new GUIContent(text("Select Shown", "全选结果"),
                             text("Select all applicable differences in the filtered results", "勾选筛选结果中全部可处理的差异项")),
                             button, GUILayout.Height(26f), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true)))
                             SelectVisible(visible);
                         GUILayout.Space(4f);
                         using (new EditorGUI.DisabledScope(_selected.Count == 0))
                         {
-                            if (GUILayout.Button(text("Clear All", "全部取消"), button, GUILayout.Height(26f), GUILayout.Width(76f)))
+                            if (GUILayout.Button(new GUIContent(text("Clear", "清空"), text("Clear all checks, including hidden ones.",
+                                "取消全部勾选，包括筛选外的勾选项。")), button, GUILayout.Height(26f), GUILayout.Width(64f)))
                             { _selected.Clear(); _repaint(); GUIUtility.ExitGUI(); }
                         }
                     }
                 }
                 int hidden = HiddenSelectionCount(visible);
                 if (hidden > 0)
-                    GUILayout.Label(text("Selected outside filter: ", "筛选外已勾选：") + hidden,
-                        Label(false, true, true), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
+                    GUILayout.Label(new GUIContent(text("Includes ", "包含 ") + hidden + text(" hidden checks", " 项筛选外勾选"),
+                        text("Apply includes these hidden checks. Clear removes all checks.", "应用时会一并处理这些隐藏勾选；“清空”可取消全部勾选。")),
+                        WarningLabel(), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
                 GUILayout.Space(7f);
                 if (visible.Count == 0)
                     GUILayout.Label(_selectionOnly && _selectionKeys.Count == 0
-                        ? text("No selected position, scale or Size Delta properties. Select properties in Animation, then rescan.",
-                            "没有选中的位置、缩放或 Size Delta 属性。请在 Animation 选中属性后重新扫描。")
-                        : text("No matching differences. Clear search or show all properties.",
-                            "没有符合筛选条件的差异。可清空搜索或显示全部属性。"), Label(false, true, true),
+                        ? text("Select properties in Animation, then rescan.", "请在 Animation 选中属性后重新扫描。")
+                        : text("No results. Clear search or turn off Differences.", "没有结果，可清空搜索或关闭“只看差异”。"), Label(false, true, true),
                         GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
                 else DrawGroups(visible, text);
             }
             if (!string.IsNullOrEmpty(_notice)) EditorGUILayout.HelpBox(Message(_notice, text), MessageType.Info);
             if (_modifiedCount.HasValue)
                 EditorGUILayout.HelpBox(text("Moved ", "已移动 ") + _modifiedCount.Value +
-                    text(" property curves. The scan has been refreshed.", " 条属性曲线，扫描结果已刷新。"), MessageType.Info);
-            GUILayout.Space(8f);
-            GUILayout.Label(text("Differences may be intentional. Only checked properties move, including those hidden by a filter. Rescan clears all checks.",
-                "数值差异可能是有意设计。只移动勾选属性，包括筛选外的勾选项；重新扫描会清空勾选。"),
-                Label(false, true, true), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
+                    text(" curves. Rescanned.", " 条曲线，已重新扫描。"), MessageType.Info);
             GUILayout.Space(10f);
         }
 
@@ -276,9 +278,9 @@ namespace URflow
                 if (row.HasDifference) differences++;
                 if (!string.IsNullOrEmpty(row.Error) || row.Result == null) unavailable++;
             }
-            GUILayout.Label(text("Total ", "共 ") + total + "  ·  " +
-                text("Different ", "差异 ") + differences + "  ·  " + text("Unavailable ", "不可处理 ") + unavailable,
-                Label(false, true, true), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
+            string summary = differences + text(" differences / ", " 项差异 / ") + total + text(" properties", " 项属性");
+            if (unavailable > 0) summary += "  ·  " + unavailable + text(" unavailable", " 项不可处理");
+            GUILayout.Label(summary, Label(false, true, true), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
         }
 
         private List<URflowKeyframeMoveScanRow> VisibleRows(Func<string, string, string> text)
@@ -333,6 +335,7 @@ namespace URflow
                 using (new EditorGUILayout.VerticalScope(card))
                 {
                     DrawGroupHeader(group.Key, group.Value, text);
+                    DrawGroupNotices(group.Value, text);
                     GUILayout.Space(3f);
                     DrawColumns(text);
                     using (new EditorGUI.DisabledScope(_pending || !_preview.IsValid))
@@ -370,7 +373,7 @@ namespace URflow
                 }
             }
             finally { EditorGUI.showMixedValue = mixed; }
-            string title = path.Length == 0 ? text("Root", "根对象") : path;
+            string title = path.Length == 0 ? text("Root", "根对象") : path.Substring(path.LastIndexOf('/') + 1);
             GUI.Label(new Rect(line.x + 22f, line.y, Mathf.Max(0f, line.width - 70f), 22f),
                 new GUIContent(title, path.Length == 0 ? (_preview.Root != null ? _preview.Root.name : title) : path), Label(true));
             GUIStyle count = Label(false, false, true);
@@ -407,37 +410,77 @@ namespace URflow
                 }
             }
             GUI.Label(new Rect(line.x + 22f, line.y, Mathf.Max(0f, labelWidth - 24f), 24f),
-                new GUIContent(PropertyLabel(row.Binding, text), row.Label + " / " + row.Binding.propertyName), Label());
+                new GUIContent(PropertyLabel(row.Binding, text), PropertyTooltip(row, text)), Label());
             DrawNumeric(new Rect(line.x + labelWidth, line.y, valueWidth, 24f), row.AnchorValue);
             DrawNumeric(new Rect(line.x + labelWidth + valueWidth, line.y, valueWidth, 24f), row.StaticValue);
             GUIStyle deltaStyle = NumericLabel();
             if (row.HasDifference) deltaStyle.normal.textColor = URflowVisuals.Amber;
             string delta = row.Delta.HasValue ? SignedNumber(row.Delta.Value) : "—";
             string exactDelta = row.Delta.HasValue ? row.Delta.Value.ToString("R", CultureInfo.InvariantCulture) : "";
+            if (_mode == URflowKeyframeMoveMode.Proportional && row.Result != null && row.HasDifference)
+                exactDelta += "\n" + text("Factor: ", "倍率：") + row.Result.DeltaOrFactor.ToString("G6", CultureInfo.InvariantCulture);
             GUI.Label(new Rect(line.x + labelWidth + valueWidth * 2f, line.y, valueWidth, 24f),
                 new GUIContent(delta, exactDelta), deltaStyle);
             if (!string.IsNullOrEmpty(row.Error))
-                GUILayout.Label(new GUIContent(Message(row.Error, text), row.Error), Label(false, true, true),
+                GUILayout.Label(new GUIContent(ShortRowMessage(row.Error, text), Message(row.Error, text)), WarningLabel(),
                     GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
-            else if (!row.HasDifference)
-                GUILayout.Label(text("Aligned", "已一致"), Label(false, false, true));
-            if (!string.IsNullOrEmpty(row.LayoutNotice))
-                GUILayout.Label(new GUIContent(Message(row.LayoutNotice, text), row.LayoutNotice),
-                    Label(false, true, true), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
-            if (_mode == URflowKeyframeMoveMode.Proportional &&
-                row.Binding.propertyName.StartsWith("m_SizeDelta.", StringComparison.Ordinal))
-                GUILayout.Label(text("Scales Size Delta values; stretched width/height also depend on the parent and anchors.",
-                    "按比例调整 Size Delta 数值；拉伸后的实际宽高还取决于父级与锚点。"),
-                    Label(false, true, true), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
             if (row.Result != null && row.Result.IsZeroFactor)
-                GUILayout.Label(text("Factor 0 removes all motion on this property.", "倍率为 0：该属性的动画变化会归零。"),
+                GUILayout.Label(new GUIContent(text("Factor 0 · removes motion", "倍率 0 · 动画变化归零"),
+                    text("All keyframe values become zero; this property loses all animated motion.", "所有关键帧数值归零，该属性的动画变化会消失。")),
                     WarningLabel(), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
             else if (row.Result != null && row.Result.IsNegativeFactor)
-                GUILayout.Label(text("Negative factor reverses values and motion direction.", "负倍率：数值符号与运动方向会反转。"),
+                GUILayout.Label(new GUIContent(text("Negative factor · reverses motion", "负倍率 · 运动反转"),
+                    text("A negative factor reverses both value signs and motion direction.", "负倍率会反转数值符号及运动方向。")),
                     WarningLabel(), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
-            if (_mode == URflowKeyframeMoveMode.Proportional && row.Result != null && row.HasDifference)
-                GUILayout.Label(text("Factor: ", "倍率：") + row.Result.DeltaOrFactor.ToString("G6", CultureInfo.InvariantCulture),
-                    Label(false, false, true), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
+        }
+
+        private static string PropertyTooltip(URflowKeyframeMoveScanRow row, Func<string, string, string> text)
+        {
+            string tooltip = row.Label + " / " + row.Binding.propertyName;
+            if (row.Binding.propertyName.StartsWith("m_SizeDelta.", StringComparison.Ordinal))
+                tooltip += "\n" + text("Size Delta is relative to the anchors. Stretched width/height also depend on the parent and anchors.",
+                    "Size Delta 是相对锚点的尺寸差；拉伸后的实际宽高还取决于父级与锚点。");
+            return tooltip;
+        }
+
+        private static string ShortRowMessage(string source, Func<string, string, string> text)
+        {
+            switch (source)
+            {
+                case "当前界面中找不到该动画属性对应的对象。":
+                    return text("Object missing", "找不到对象");
+                case "该对象的锚点或轴心有动画，无法按固定布局对齐位置或 Size Delta。":
+                    return text("Animated anchors/pivot · cannot align", "锚点或轴心有动画，无法对齐");
+                case "该属性由布局组件驱动，请先解除对应布局驱动再对齐。":
+                case "该轴的锚点或轴心由布局组件驱动，请先解除对应布局驱动再对齐。":
+                case "拉伸轴的位置或尺寸由布局组件驱动，请先解除对应布局驱动再对齐。":
+                    return text("Layout driven · release before aligning", "布局驱动中，请先解除驱动");
+                case "无法读取该属性的有效静态布局值。":
+                    return text("Static value unavailable", "无法读取默认值");
+                case "该属性没有可处理的关键帧。":
+                    return text("No keyframes", "没有关键帧");
+                case "拉伸布局的配对属性无法可靠读取或处理，请先修正该轴的位置或 Size Delta。":
+                    return text("Paired position/size unavailable", "同轴位置或尺寸无法处理");
+                case "Proportional adjustment cannot use a zero anchor for a nonzero default value.":
+                    return text("Zero anchor · turn off Proportional", "基准帧为 0，请关闭“按比例”");
+            }
+            return Message(source, text);
+        }
+
+        private static void DrawGroupNotices(List<URflowKeyframeMoveScanRow> rows, Func<string, string, string> text)
+        {
+            var notices = new HashSet<string>(StringComparer.Ordinal);
+            foreach (URflowKeyframeMoveScanRow row in rows)
+            {
+                if (string.IsNullOrEmpty(row.LayoutNotice) || !notices.Add(row.LayoutNotice)) continue;
+                string summary = Message(row.LayoutNotice, text);
+                if (row.LayoutNotice.StartsWith("X 拉伸布局：", StringComparison.Ordinal))
+                    summary = text("Stretch X · check position + size if both differ", "X 拉伸 · 位置与尺寸都有差异时一起勾选");
+                else if (row.LayoutNotice.StartsWith("Y 拉伸布局：", StringComparison.Ordinal))
+                    summary = text("Stretch Y · check position + size if both differ", "Y 拉伸 · 位置与尺寸都有差异时一起勾选");
+                GUILayout.Label(new GUIContent(summary, Message(row.LayoutNotice, text)), WarningLabel(),
+                    GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
+            }
         }
 
         private static void DrawNumeric(Rect rect, float? value)
@@ -595,7 +638,7 @@ namespace URflow
             string axis = name.Length > 0 ? name.Substring(name.LastIndexOf('.') + 1).ToUpperInvariant() : "";
             if (name.StartsWith("m_LocalScale.", StringComparison.Ordinal)) return text("Scale ", "缩放 ") + axis;
             if (name.StartsWith("m_AnchoredPosition.", StringComparison.Ordinal)) return text("UI Pos ", "UI 位置 ") + axis;
-            if (name.StartsWith("m_SizeDelta.", StringComparison.Ordinal)) return text("UI Size ", "UI 尺寸 ") + axis;
+            if (name.StartsWith("m_SizeDelta.", StringComparison.Ordinal)) return text("Size Δ", "尺寸差 ") + axis;
             if (name.StartsWith("m_LocalPosition.", StringComparison.Ordinal)) return text("Pos ", "位置 ") + axis;
             return name;
         }

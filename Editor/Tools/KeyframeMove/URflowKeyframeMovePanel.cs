@@ -10,7 +10,7 @@ namespace URflow
         private readonly URflowKeyframeMoveScanPanel _scanPanel;
         private Vector2 _scroll;
         private bool _disposed;
-        private Vector2 _layoutSize = new Vector2(296f, 420f);
+        private Vector2 _layoutSize = new Vector2(296f, 740f);
         internal Rect ActionsRect { get; private set; }
         internal Rect CloseRect { get; private set; }
         internal Rect BodyRect { get; private set; }
@@ -74,12 +74,15 @@ namespace URflow
                 using (new EditorGUI.DisabledScope(_scanPanel.IsPending))
                 {
                     if (GUI.Button(new Rect(ActionsRect.x, ActionsRect.y, 68f, 34f),
-                        text("Rescan", "扫描"), secondaryButton)) Refresh(true);
+                        new GUIContent(text("Rescan", "扫描"), text("Read static values again and clear all checks.",
+                            "重新读取静态值，并清空所有勾选。")), secondaryButton)) Refresh(true);
                 }
                 using (new EditorGUI.DisabledScope(!_scanPanel.CanApply))
                 {
                     if (GUI.Button(new Rect(ActionsRect.x + 72f, ActionsRect.y, ActionsRect.width - 72f, 34f),
-                        text("Apply", "应用") + " (" + _scanPanel.SelectedCount + ")", primaryButton)) _scanPanel.Apply();
+                        new GUIContent(text("Apply", "应用") + " (" + _scanPanel.SelectedCount + ")",
+                            text("Move only checked properties, including checks hidden by filters. Differences may be intentional.",
+                                "只移动勾选属性，包括筛选外的勾选项。数值差异可能是有意设计。")), primaryButton)) _scanPanel.Apply();
                 }
             }
             finally { GUI.color = oldColor; GUI.enabled = oldEnabled; }

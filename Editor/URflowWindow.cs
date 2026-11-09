@@ -77,8 +77,39 @@ namespace URflow
         [MenuItem("Window/URflow %#E")]
         public static void ShowWindow()
         {
-            URflowWindow w = GetWindow<URflowWindow>("URFLOW");
-            w.minSize = new Vector2(320, 560);
+            // Reuse a docked or manually resized window without changing its layout.
+            URflowWindow[] existing = Resources.FindObjectsOfTypeAll<URflowWindow>();
+            if (existing.Length > 0)
+            {
+                existing[0].Show();
+                existing[0].Focus();
+                return;
+            }
+
+            URflowWindow window = CreateInstance<URflowWindow>();
+            window.titleContent = new GUIContent("URFLOW");
+            Rect editor = EditorGUIUtility.GetMainWindowPosition();
+            Rect desktop = UnityEditorInternal.InternalEditorUtility.GetBoundsOfDesktopAtPoint(editor.center);
+            Rect initialRect = InitialWindowRect(desktop, editor.center);
+            window.minSize = new Vector2(Mathf.Min(320f, initialRect.width), Mathf.Min(560f, initialRect.height));
+            window.Show();
+            // Show restores Unity's saved geometry, which may be maximized from a prior session.
+            // Apply the compact default afterward, only for a newly created instance.
+            window.maximized = false;
+            window.position = initialRect;
+            window.Focus();
+        }
+
+        internal static Rect InitialWindowRect(Rect desktop, Vector2 center)
+        {
+            const float margin = 24f;
+            float width = Mathf.Min(350f, Mathf.Max(1f, desktop.width - margin * 2f));
+            float height = Mathf.Min(1000f, Mathf.Max(1f, desktop.height - margin * 2f));
+            float x = Mathf.Clamp(center.x - width * .5f,
+                desktop.x + margin, desktop.xMax - margin - width);
+            float y = Mathf.Clamp(center.y - height * .5f,
+                desktop.y + margin, desktop.yMax - margin - height);
+            return new Rect(x, y, width, height);
         }
 
         private void OnEnable()
