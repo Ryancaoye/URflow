@@ -31,7 +31,7 @@
 模板中的本机路径：
 
 - Unity：`G:\L50_1_1_1\UnityEditor\Editor\Unity.exe`
-- 测试工程：`C:\Users\liuyiran02\URFlowValidation\v1.0.4`
+- 测试工程：`D:\插件\URFLOW\6-开发\测试验证\v1.0.4`
 - 包依赖和 bootstrap 期望路径：`D:/插件/URFLOW/6-开发/URflow-v1.0.4`
 
 `ProjectTemplate/ProjectSettings/ProjectVersion.txt` 记录实际编辑器版本，可作为新工程版本信息的参考。其余 ProjectSettings 由独立工程自己的 Unity 生成，不复制制作工程的配置。
@@ -41,9 +41,9 @@
 从 PowerShell 执行，先 bootstrap，再依次运行其他套件。每次等待上一个 Unity 进程结束。脚本返回 PID、日志和报告路径，运行成功须同时确认进程退出、报告更新时间属于本次运行、PASS 项数，以及日志中没有 C# 编译错误。启动进程本身不能作为验证通过的证据。
 
 ```powershell
-.\RunValidation.ps1 -Suite Bootstrap -UnityPath 'G:\L50_1_1_1\UnityEditor\Editor\Unity.exe' -ProjectPath 'C:\Users\liuyiran02\URFlowValidation\v1.0.4'
-.\RunValidation.ps1 -Suite Service -UnityPath 'G:\L50_1_1_1\UnityEditor\Editor\Unity.exe' -ProjectPath 'C:\Users\liuyiran02\URFlowValidation\v1.0.4'
-.\RunValidation.ps1 -Suite UiKeys -UnityPath 'G:\L50_1_1_1\UnityEditor\Editor\Unity.exe' -ProjectPath 'C:\Users\liuyiran02\URFlowValidation\v1.0.4'
+.\RunValidation.ps1 -Suite Bootstrap -UnityPath 'G:\L50_1_1_1\UnityEditor\Editor\Unity.exe' -ProjectPath 'D:\插件\URFLOW\6-开发\测试验证\v1.0.4'
+.\RunValidation.ps1 -Suite Service -UnityPath 'G:\L50_1_1_1\UnityEditor\Editor\Unity.exe' -ProjectPath 'D:\插件\URFLOW\6-开发\测试验证\v1.0.4'
+.\RunValidation.ps1 -Suite UiKeys -UnityPath 'G:\L50_1_1_1\UnityEditor\Editor\Unity.exe' -ProjectPath 'D:\插件\URFLOW\6-开发\测试验证\v1.0.4'
 ```
 
 | Suite | 入口 | 运行模式 | 报告 |
@@ -77,4 +77,4 @@ UiKeys 直接设置打开状态并种入只读预览，作为界面布局夹具�
 - `URflowKeyframeMoveUiValidation.cs`：原生事件和尺寸探针。
 - `URFlowUiProbeRunner.cs`：等待 editor 稳定、保存报告、恢复语言偏好、可选窗口渲染捕获、退出 Unity。
 
-原始完整日志留在本次独立测试工程 `C:\Users\liuyiran02\URFlowValidation\v1.0.4\Logs`，本目录仅携带可复用源代码和简要结果。
+原始完整日志留在本次独立测试工程 `D:\插件\URFLOW\6-开发\测试验证\v1.0.4\Logs`，本目录仅携带可复用源代码和简要结果。

@@ -2,7 +2,7 @@ param(
     [ValidateSet('Bootstrap', 'Service', 'UiKeys', 'UiActual', 'UiStrict')]
     [string]$Suite = 'Bootstrap',
     [string]$UnityPath = 'G:\L50_1_1_1\UnityEditor\Editor\Unity.exe',
-    [string]$ProjectPath = 'C:\Users\liuyiran02\URFlowValidation\v1.0.4'
+    [string]$ProjectPath = 'D:\插件\URFLOW\6-开发\测试验证\v1.0.4'
 )
 
 $ErrorActionPreference = 'Stop'
