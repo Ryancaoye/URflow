@@ -56,6 +56,15 @@ All notable changes to URflow will be documented in this file.
 - Validation: the relocated Unity 2022.3.56f1 project starts successfully, PackageInfo confirms the D: staged package, 19 existing math checks pass, all 17 Editor sources compile with warnings as errors, and seven PowerShell entry points parse successfully. Editor source hashes are unchanged. The 426 feature checks from November 7 were not rerun today; no production project file was written.
 - Save validation-path updates as c7f242a0823376c1b4a2de57b2ee969e8a6f8cf1 on feature/v1.0.4. Synchronize rules, guides and update records with the accompanying documentation commit. Formal version fields remain 1.0.3; target v1.0.4 is unreleased. No merge, push, tag or release.
 
+#### 2026-11-09 default window and Keyframe Move layout
+
+- Create a new URFlow window as a narrow floating window, preferring 350x1000 logical units and fitting it within the current desktop. Reuse an existing window without resetting manual resizing or docking; close the old instance and reopen from Window > URflow to see the new default.
+- Raise the Keyframe Move sheet to a maximum of 740 logical units (about 736 at the default window height), constrained by the available window area. Keep header/footer actions visible and scroll the body only when it overflows.
+- Simplify visible wording and place filters together. Show short object names with full paths in tooltips; move routine explanations, exact numbers and normal ratio factors into tooltips. Retain actionable errors, stale-result warnings, zero/negative ratios, stretched-axis pairing notices and the scope of hidden checked items.
+- Keep original icons, colors, curve glow, animation durations and all scan/apply/Undo/curve algorithms unchanged.
+- Validation: all 17 Editor sources compile at warning level 4 with warnings as errors, and source hashes match cb860096. A clean, user-approved v1.0.4-c1 project using the separately installed Unity 2022.3.56f1c1 confirms the D: staged package and passes 111 checks: math 19, window/sheet geometry 15, close animation 14, selected-property service 19 and scan 44. Legacy unified-page and stretched-layout UI automation each time out with zero checks because the global delayCall queue does not execute in this hidden startup; these runs are not counted as passed or treated as proof of a product defect. Native window pixel capture is unavailable, and full native interactions and production-scene appearance remain pending.
+- Save the four UI source changes as cb860096ce861eab926c4273bd0156a7dbf5c96f on feature/v1.0.4; documentation is saved with its accompanying commit (see Git history). Preserve the seven unrelated pre-existing .meta edits. Formal version fields remain 1.0.3; target v1.0.4 is unreleased. No merge, push, tag or release.
+
 ## [1.0.3] - 2026-09-03
 
 > Code changes in this release landed between 2026-04-16 and 2026-04-22 but were
