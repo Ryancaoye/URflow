@@ -32,10 +32,13 @@ namespace URflow
         private const float GlowSigma = 4.25f;
         private const float GlowStrokeHalfWidth = 3.5f;
         private const float GlowOpacity = 0.46f;
+        private const float CurveEndpointGlowStrength = 0.4f;
+        private const float CurveEndpointGlowFadePixels = 24f;
         private static readonly Dictionary<int, SurfaceAssets> Surfaces = new Dictionary<int, SurfaceAssets>();
         private static readonly Vector2[] CurvePoints = new Vector2[CurveSegments + 1];
         private static readonly Vector2[] CurveNormals = new Vector2[CurveSegments + 1];
         private static readonly Color[] CurveColors = new Color[CurveSegments + 1];
+        private static readonly float[] CurveGlowStrengths = new float[CurveSegments + 1];
         private static readonly Vector2[] EdgePoints = new Vector2[EdgeCapacity];
         private static readonly Vector2[] EdgeNormals = new Vector2[EdgeCapacity];
         private static readonly Color[] EdgeColors = new Color[EdgeCapacity];
@@ -160,6 +163,7 @@ namespace URflow
             Vector4 parameters = new Vector4(x1, y1, x2, y2);
             if (!_curveValid || _curveRect != r || !_curveParameters.Equals(parameters))
             {
+                float distanceFromStart = 0f;
                 for (int i = 0; i <= CurveSegments; i++)
                 {
                     float t = (float)i / CurveSegments;
@@ -169,6 +173,15 @@ namespace URflow
                     CurvePoints[i] = new Vector2(Mathf.LerpUnclamped(r.x, r.xMax, t),
                         Mathf.LerpUnclamped(r.yMax, r.y, value));
                     CurveColors[i] = CurveColor(t);
+                    if (i > 0) distanceFromStart += Vector2.Distance(CurvePoints[i - 1], CurvePoints[i]);
+                    CurveGlowStrengths[i] = distanceFromStart;
+                }
+                for (int i = 0; i <= CurveSegments; i++)
+                {
+                    // Fade only the halo near either endpoint; the core and geometry stay intact.
+                    float distanceToEndpoint = Mathf.Min(CurveGlowStrengths[i], distanceFromStart - CurveGlowStrengths[i]);
+                    CurveGlowStrengths[i] = Mathf.Lerp(CurveEndpointGlowStrength, 1f,
+                        Mathf.SmoothStep(0f, 1f, distanceToEndpoint / CurveEndpointGlowFadePixels));
                 }
                 BuildNormals(CurvePoints, CurveNormals, CurveSegments + 1, false);
                 _curveRect = r;
@@ -358,6 +371,8 @@ namespace URflow
             {
                 Color first = CurveColors[i - 1] * tint;
                 Color second = CurveColors[i] * tint;
+                first.a *= CurveGlowStrengths[i - 1];
+                second.a *= CurveGlowStrengths[i];
                 for (int band = 0; band < GlowBands; band++)
                 {
                     Color firstInner = first;
