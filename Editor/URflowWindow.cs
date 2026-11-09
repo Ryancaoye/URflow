@@ -35,7 +35,7 @@ namespace URflow
         // ── Colors (Flow-inspired Theme) ──
         private static readonly Color GridCol = new Color(0.22f, 0.22f, 0.22f);
         private static readonly Color CurveCol = new Color(0.95f, 0.95f, 0.95f);
-        private static readonly Color HandleCol = new Color(1.00f, 0.72f, 0.15f, 0.55f);
+        private static readonly Color HandleCol = new Color(1.00f, 0.72f, 0.15f, 1f);
         private static readonly Color P1Col = new Color(1.00f, 0.72f, 0.15f);
         private static readonly Color P2Col = new Color(1.00f, 0.72f, 0.15f);
         private static readonly Color DiagCol = new Color(0.22f, 0.22f, 0.22f);
