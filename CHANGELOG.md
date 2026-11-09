@@ -84,6 +84,12 @@ All notable changes to URflow will be documented in this file.
 - Validation: 17 product sources strictly compile with warning level 4 and warnings as errors; 4 actual Unity c1 offscreen checks pass. Both endpoint overlaps display pure gold at normal unfaded GUI alpha 1, the antialiasing fringe remains, and curve-only pixels including endpoint halos are identical. The comparison was inspected; full native-window and animation editing acceptance remains pending. Prior 111, 21 and 15 checks were not rerun.
 - Save this one-line window change as aafc9f24bd2893c08dfe56dd1df1a8b3ed413d76 on feature/v1.0.4. Preserve 2227b1e and its 55%-opacity/15-check stage as history; update the same final tutorial summary. Formal version fields remain 1.0.3; target v1.0.4 is unreleased.
 
+#### 2026-11-09 scan controls and Hierarchy navigation
+
+- Scan all supported properties in the current clip, always showing differences and unavailable rows. Remove the two scope/filter controls while keeping search, hidden checks and checked-only Apply. Promote Proportional to a full-row mode button and center the close icon using geometry. Double-click an object title or a row outside its checkbox to ping the target while retaining Selection, Animation root/clip and checks; missing targets report safely.
+- Validation: 17 product sources strictly compile; 36 focused checks pass once as 17 local native event/Hierarchy checks, 13 reflected runtime-state checks, 2 actual offscreen close-pixel checks and 4 static integration checks. Mode algorithms and transient-clip Apply execute directly; the proportional GUI route and full DrawBody cleanup hookup are static proof. Full-window capture, global delayCall dispatch and production-scene acceptance are not claimed.
+- Preserve failed diagnostics for the close pixel tie and clipped mouse release; final capture cleanup retains other controls and 1x/2x close centers pass without relaxed tolerance. Save exactly four product sources as 3e48d102b9deee46df0fce8dc41a55e38e89d2bb on feature/v1.0.4. Earlier checks stay historical; formal version fields remain 1.0.3 and v1.0.4 is unreleased.
+
 ## [1.0.3] - 2026-09-03
 
 > Code changes in this release landed between 2026-04-16 and 2026-04-22 but were
