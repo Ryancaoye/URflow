@@ -78,6 +78,12 @@ All notable changes to URflow will be documented in this file.
 - Validation: all 17 product sources strictly compile with warning level 4 and warnings as errors. The 14 actual Unity c1 offscreen drawing checks and one static window paint-order check pass; before/after images were inspected. Preserve curve-only pixels and both endpoint halos. Full native-window and animation-editing interaction acceptance remains pending; the prior 111 and 21 checks were not rerun.
 - Save the renderer and window changes as 2227b1e976030e1a6991a262c51ecb1573c9cb3b on feature/v1.0.4. Curve values, control-point positions, dragging, READ/APPLY and preset logic remain unchanged. Formal version fields remain 1.0.3; target v1.0.4 is unreleased.
 
+#### 2026-11-09 opaque yellow guide core
+
+- Raise yellow guide core opacity from 55% to 100%, retaining the 2-unit width, 0.55-unit transparent antialiasing fringe, gold RGB and curve-then-guides-then-control-points order. Inherited GUI fading remains unchanged.
+- Validation: 17 product sources strictly compile with warning level 4 and warnings as errors; 4 actual Unity c1 offscreen checks pass. Both endpoint overlaps display pure gold at normal unfaded GUI alpha 1, the antialiasing fringe remains, and curve-only pixels including endpoint halos are identical. The comparison was inspected; full native-window and animation editing acceptance remains pending. Prior 111, 21 and 15 checks were not rerun.
+- Save this one-line window change as aafc9f24bd2893c08dfe56dd1df1a8b3ed413d76 on feature/v1.0.4. Preserve 2227b1e and its 55%-opacity/15-check stage as history; update the same final tutorial summary. Formal version fields remain 1.0.3; target v1.0.4 is unreleased.
+
 ## [1.0.3] - 2026-09-03
 
 > Code changes in this release landed between 2026-04-16 and 2026-04-22 but were
