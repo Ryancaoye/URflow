@@ -15,13 +15,12 @@ namespace URflow
         private URflowKeyframeMoveMode _mode = URflowKeyframeMoveMode.Translate;
         private URflowKeyframeMoveAnchor _anchor = URflowKeyframeMoveAnchor.Last;
         private URflowKeyframeMoveScanPreview _preview;
-        private readonly HashSet<string> _selectionKeys = new HashSet<string>(StringComparer.Ordinal);
-        private bool _selectionOnly;
-        private string _selectionError;
         private string _search = string.Empty;
-        private bool _differencesOnly = true;
         private string _error;
         private string _notice;
+        private string _navigationError;
+        private int _navigationControl;
+        private URflowKeyframeMoveScanRow _navigationRow;
         private int? _modifiedCount;
         private bool _pending;
         private bool _disposed;
@@ -32,8 +31,6 @@ namespace URflow
         internal Rect FirstAnchorRect { get; private set; }
         internal Rect LastAnchorRect { get; private set; }
         internal Rect RatioRect { get; private set; }
-        internal Rect SelectionOnlyRect { get; private set; }
-        internal Rect DifferencesOnlyRect { get; private set; }
         internal bool CanApply
         {
             get { return !_disposed && !_pending && _preview != null && _preview.IsValid && _selected.Count > 0; }
@@ -47,8 +44,10 @@ namespace URflow
             if (_pending || _disposed) return;
             if (clearNotice) { _notice = null; _modifiedCount = null; }
             _selected.Clear();
+            CleanupNavigationCapture();
             _preview = null;
             _error = null;
+            _navigationError = null;
             _pending = true;
             EditorApplication.delayCall += ReadPreview;
             _repaint();
@@ -60,7 +59,6 @@ namespace URflow
             try
             {
                 URflowKeyframeMoveScanService.TryCreatePreview(_anchor, _mode, out _preview, out _error);
-                CaptureSelection();
                 if (_preview != null && !string.IsNullOrEmpty(_preview.Notice)) _notice = _preview.Notice;
             }
             catch (ExitGUIException) { throw; }
@@ -68,30 +66,10 @@ namespace URflow
             finally { _pending = false; _repaint(); }
         }
 
-        private void CaptureSelection()
-        {
-            _selectionKeys.Clear();
-            _selectionError = null;
-            if (!_selectionOnly || _preview == null || !_preview.IsValid) return;
-            List<string> keys;
-            if (URflowKeyframeMoveScanService.TryGetSelectedBindingKeys(_preview, out keys, out _selectionError))
-                foreach (string key in keys) _selectionKeys.Add(key);
-        }
-
-        private void ReadSelection()
-        {
-            if (_disposed) return;
-            try { CaptureSelection(); }
-            catch (ExitGUIException) { throw; }
-            catch (Exception exception) { _selectionError = exception.Message; _selectionKeys.Clear(); }
-            finally { _pending = false; _repaint(); }
-        }
-
         public void Apply()
         {
             if (!CanApply) return;
             URflowKeyframeMoveScanPreview plan = _preview;
-            bool selectionOnly = _selectionOnly;
             // Freeze the explicit check list before leaving OnGUI, including hidden checked rows.
             var rows = new List<URflowKeyframeMoveScanRow>();
             foreach (URflowKeyframeMoveScanRow row in plan.Rows)
@@ -104,19 +82,6 @@ namespace URflow
                 bool applied = false;
                 try
                 {
-                    if (selectionOnly)
-                    {
-                        List<string> currentKeys;
-                        if (!URflowKeyframeMoveScanService.TryGetSelectedBindingKeys(plan, out currentKeys, out _error)) return;
-                        var currentSelection = new HashSet<string>(currentKeys, StringComparer.Ordinal);
-                        foreach (URflowKeyframeMoveScanRow row in rows)
-                            if (!currentSelection.Contains(URflowKeyframeMoveService.BindingKey(row.Binding)))
-                            {
-                                _error = "Animation 属性选择已改变，请重新扫描。";
-                                _selected.Clear();
-                                return;
-                            }
-                    }
                     int count;
                     if (URflowKeyframeMoveScanService.TryApply(plan, rows, out count, out _error))
                     {
@@ -148,6 +113,19 @@ namespace URflow
 
         public void DrawBody(GUIStyle button, GUIStyle selected, Func<string, string, string> text)
         {
+            Event current = Event.current;
+            bool leftMouseUp = current != null && current.rawType == EventType.MouseUp && current.button == 0;
+            try { DrawBodyContents(button, selected, text); }
+            finally
+            {
+                // Outside a scroll clip, type becomes Ignore while rawType still records release.
+                // Wait until every native button has had a chance to complete a valid double click.
+                if (leftMouseUp) CleanupNavigationCapture();
+            }
+        }
+
+        private void DrawBodyContents(GUIStyle button, GUIStyle selected, Func<string, string, string> text)
+        {
             using (new EditorGUI.DisabledScope(_pending))
             {
                 using (new EditorGUILayout.HorizontalScope())
@@ -169,17 +147,29 @@ namespace URflow
                     LastAnchorRect = GUILayoutUtility.GetLastRect();
                 }
                 GUILayout.Space(6f);
-                bool ratio = EditorGUILayout.ToggleLeft(new GUIContent(text("Proportional", "按比例"),
-                    text("Scale every keyframe value by the same factor. When off, shift all values by the same amount.",
-                        "勾选时，所有关键帧数值按同一倍率调整；关闭时，所有数值整体平移。")),
-                    _mode == URflowKeyframeMoveMode.Proportional, Label(), GUILayout.Height(20f));
-                RatioRect = GUILayoutUtility.GetLastRect();
-                if (ratio != (_mode == URflowKeyframeMoveMode.Proportional))
+                bool proportional = _mode == URflowKeyframeMoveMode.Proportional;
+                GUIStyle modeButton = new GUIStyle(proportional ? selected : button)
                 {
-                    _mode = ratio ? URflowKeyframeMoveMode.Proportional : URflowKeyframeMoveMode.Translate;
+                    fontSize = 12, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft,
+                    padding = new RectOffset(10, 82, 0, 0)
+                };
+                RatioRect = GUILayoutUtility.GetRect(0f, 32f, GUILayout.ExpandWidth(true));
+                if (GUI.Button(RatioRect, new GUIContent(text("Proportional", "按比例"),
+                    proportional ? text("Current mode: multiply every keyframe value by the same factor. Click to use a uniform offset.",
+                        "当前模式：所有关键帧数值按同一倍率调整；点击切回整体平移。") :
+                        text("Current mode: shift every keyframe value by the same amount. Click to use proportional adjustment.",
+                            "当前模式：所有关键帧数值整体平移；点击切换为按比例调整。")), modeButton))
+                {
+                    _mode = proportional ? URflowKeyframeMoveMode.Translate : URflowKeyframeMoveMode.Proportional;
                     Refresh(true);
                     GUIUtility.ExitGUI();
                 }
+                GUIStyle modeHint = Label(true);
+                modeHint.fontSize = 11;
+                modeHint.alignment = TextAnchor.MiddleRight;
+                modeHint.normal.textColor = modeButton.normal.textColor;
+                GUI.Label(new Rect(RatioRect.xMax - 80f, RatioRect.y, 68f, RatioRect.height),
+                    proportional ? text("× Ratio", "× 倍率") : text("+ Offset", "+ 平移"), modeHint);
                 GUILayout.Space(6f);
                 float previousLabelWidth = EditorGUIUtility.labelWidth;
                 string search;
@@ -191,36 +181,11 @@ namespace URflow
                 }
                 finally { EditorGUIUtility.labelWidth = previousLabelWidth; }
                 if (search != _search) { _search = search; GUIUtility.ExitGUI(); }
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    bool differencesOnly = EditorGUILayout.ToggleLeft(new GUIContent(text("Differences", "只看差异"),
-                        text("Show changed or unavailable properties only.", "仅显示有差异或无法处理的属性。")),
-                        _differencesOnly, Label(), GUILayout.Height(20f), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
-                    DifferencesOnlyRect = GUILayoutUtility.GetLastRect();
-                    if (differencesOnly != _differencesOnly) { _differencesOnly = differencesOnly; GUIUtility.ExitGUI(); }
-                    bool selectionOnly = EditorGUILayout.ToggleLeft(new GUIContent(
-                        text("Animation selection", "Animation 选中项"),
-                        text("Show the selected position, scale and Size Delta properties in Animation. Rescan after changing selection. Changing this scope clears checks.",
-                            "仅显示 Animation 选中的位置、缩放和 Size Delta 属性；改变属性选择后请重新扫描。切换此范围会清空勾选。")),
-                        _selectionOnly, Label(), GUILayout.Height(20f), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
-                    SelectionOnlyRect = GUILayoutUtility.GetLastRect();
-                    if (selectionOnly != _selectionOnly)
-                    {
-                        _selectionOnly = selectionOnly;
-                        _selected.Clear();
-                        _selectionKeys.Clear();
-                        _selectionError = null;
-                        _pending = true;
-                        EditorApplication.delayCall += ReadSelection;
-                        _repaint();
-                        GUIUtility.ExitGUI();
-                    }
-                }
             }
             GUILayout.Space(6f);
             if (_pending) GUILayout.Label(text("Scanning…", "扫描中…"), Label(false, true, true));
             if (!string.IsNullOrEmpty(_error)) EditorGUILayout.HelpBox(Message(_error, text), MessageType.Warning);
-            if (!string.IsNullOrEmpty(_selectionError)) EditorGUILayout.HelpBox(Message(_selectionError, text), MessageType.Warning);
+            if (!string.IsNullOrEmpty(_navigationError)) EditorGUILayout.HelpBox(Message(_navigationError, text), MessageType.Warning);
             if (_preview != null)
             {
                 string context = (_preview.Root != null ? _preview.Root.name : "") + " / " +
@@ -253,9 +218,7 @@ namespace URflow
                         WarningLabel(), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
                 GUILayout.Space(7f);
                 if (visible.Count == 0)
-                    GUILayout.Label(_selectionOnly && _selectionKeys.Count == 0
-                        ? text("Select properties in Animation, then rescan.", "请在 Animation 选中属性后重新扫描。")
-                        : text("No results. Clear search or turn off Differences.", "没有结果，可清空搜索或关闭“只看差异”。"), Label(false, true, true),
+                    GUILayout.Label(text("No differences found. Clear search or rescan.", "未找到差异，可清空搜索或重新扫描。"), Label(false, true, true),
                         GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
                 else DrawGroups(visible, text);
             }
@@ -273,7 +236,6 @@ namespace URflow
             int total = 0;
             foreach (URflowKeyframeMoveScanRow row in _preview.Rows)
             {
-                if (_selectionOnly && !_selectionKeys.Contains(URflowKeyframeMoveService.BindingKey(row.Binding))) continue;
                 total++;
                 if (row.HasDifference) differences++;
                 if (!string.IsNullOrEmpty(row.Error) || row.Result == null) unavailable++;
@@ -290,9 +252,8 @@ namespace URflow
             string query = (_search ?? string.Empty).Trim();
             foreach (URflowKeyframeMoveScanRow row in _preview.Rows)
             {
-                if (_selectionOnly && !_selectionKeys.Contains(URflowKeyframeMoveService.BindingKey(row.Binding))) continue;
                 // Always retain errors in the difference view, even if the default could not be read.
-                if (_differencesOnly && !row.HasDifference && string.IsNullOrEmpty(row.Error)) continue;
+                if (!row.HasDifference && string.IsNullOrEmpty(row.Error)) continue;
                 string haystack = (row.Label ?? "") + " " + row.Binding.path + " " +
                     row.Binding.propertyName + " " + PropertyLabel(row.Binding, text);
                 if (query.Length > 0 && haystack.IndexOf(query, StringComparison.OrdinalIgnoreCase) < 0) continue;
@@ -354,6 +315,7 @@ namespace URflow
             foreach (URflowKeyframeMoveScanRow row in rows)
                 if (row.CanApply) { eligible++; if (_selected.Contains(row)) selected++; }
             Rect line = GUILayoutUtility.GetRect(0f, 22f, GUILayout.ExpandWidth(true));
+            if (rows.Count > 0) HandleObjectDoubleClick(line, rows[0]);
             bool mixed = EditorGUI.showMixedValue;
             try
             {
@@ -375,7 +337,8 @@ namespace URflow
             finally { EditorGUI.showMixedValue = mixed; }
             string title = path.Length == 0 ? text("Root", "根对象") : path.Substring(path.LastIndexOf('/') + 1);
             GUI.Label(new Rect(line.x + 22f, line.y, Mathf.Max(0f, line.width - 70f), 22f),
-                new GUIContent(title, path.Length == 0 ? (_preview.Root != null ? _preview.Root.name : title) : path), Label(true));
+                new GUIContent(title, (path.Length == 0 ? (_preview.Root != null ? _preview.Root.name : title) : path) +
+                    "\n" + text("Double-click to locate this object in Hierarchy.", "双击在 Hierarchy 中定位此对象。")), Label(true));
             GUIStyle count = Label(false, false, true);
             count.alignment = TextAnchor.MiddleRight;
             GUI.Label(new Rect(line.xMax - 46f, line.y, 46f, 22f), rows.Count + text(" props", " 项"), count);
@@ -397,6 +360,7 @@ namespace URflow
         private void DrawRow(URflowKeyframeMoveScanRow row, Func<string, string, string> text)
         {
             Rect line = GUILayoutUtility.GetRect(0f, 24f, GUILayout.ExpandWidth(true));
+            HandleObjectDoubleClick(line, row);
             float labelWidth = Mathf.Min(84f, line.width * .34f);
             float valueWidth = Mathf.Max(0f, (line.width - labelWidth) / 3f);
             using (new EditorGUI.DisabledScope(!row.CanApply))
@@ -434,9 +398,94 @@ namespace URflow
                     WarningLabel(), GUILayout.MinWidth(0f), GUILayout.ExpandWidth(true));
         }
 
+        // Navigation never changes Unity Selection, the Animation context, or the check list.
+        internal bool TryPingRow(URflowKeyframeMoveScanRow row, out string error)
+        {
+            error = null;
+            if (_disposed || _pending)
+            {
+                error = "扫描面板当前无法定位对象，请等待扫描完成。";
+                return false;
+            }
+            GameObject target;
+            if (!URflowKeyframeMoveScanService.TryResolveRowGameObject(_preview, row, out target, out error))
+            {
+                _navigationError = error;
+                _repaint();
+                return false;
+            }
+            try
+            {
+                EditorGUIUtility.PingObject(target);
+                _navigationError = null;
+                _repaint();
+                return true;
+            }
+            catch (Exception exception)
+            {
+                URflowKeyframeMoveService.RethrowExitGUI(exception);
+                error = URflowKeyframeMoveService.FriendlyError(exception);
+                _navigationError = error;
+                _repaint();
+                return false;
+            }
+        }
+
+        private void HandleObjectDoubleClick(Rect line, URflowKeyframeMoveScanRow row)
+        {
+            Event current = Event.current;
+            EventType type = current != null ? current.type : EventType.Ignore;
+            int mouseButton = current != null ? current.button : -1;
+            int clickCount = current != null ? current.clickCount : 0;
+            int previousHotControl = GUIUtility.hotControl;
+            Rect navigationArea = new Rect(line.x + 22f, line.y, Mathf.Max(0f, line.width - 22f), line.height);
+            // Unity's native hit testing respects the scroll viewport and nested GUI clips.
+            // The transparent control excludes the checkbox and changes no selection or checks.
+            bool clicked = GUI.Button(navigationArea, GUIContent.none, GUIStyle.none);
+            int hotControl = GUIUtility.hotControl;
+            if (type == EventType.MouseDown && mouseButton == 0 &&
+                hotControl != 0 && hotControl != previousHotControl)
+            {
+                ClearNavigationClick();
+                if (clickCount == 2 && !_pending)
+                {
+                    _navigationControl = hotControl;
+                    _navigationRow = row;
+                }
+            }
+            if (type != EventType.MouseUp || mouseButton != 0) return;
+            bool armed = previousHotControl != 0 && previousHotControl == _navigationControl &&
+                ReferenceEquals(row, _navigationRow);
+            // MouseUp may have clickCount 0/1 even for a double click. Use only the
+            // double MouseDown that this exact native control actually captured.
+            if (previousHotControl != 0 && previousHotControl == _navigationControl &&
+                hotControl != previousHotControl) ClearNavigationClick();
+            if (!clicked || !armed || _pending) return;
+            string error;
+            TryPingRow(row, out error);
+            // Missing-target feedback can add a GUILayout row; rebuild on the next layout event.
+            GUIUtility.ExitGUI();
+        }
+
+        // Release only the capture created by this panel's native navigation button.
+        // Refresh/cancel and the raw-MouseUp draw cleanup share this lifecycle boundary.
+        internal void CleanupNavigationCapture()
+        {
+            if (_navigationControl != 0 && GUIUtility.hotControl == _navigationControl)
+                GUIUtility.hotControl = 0;
+            ClearNavigationClick();
+        }
+
+        private void ClearNavigationClick()
+        {
+            _navigationControl = 0;
+            _navigationRow = null;
+        }
+
         private static string PropertyTooltip(URflowKeyframeMoveScanRow row, Func<string, string, string> text)
         {
-            string tooltip = row.Label + " / " + row.Binding.propertyName;
+            string tooltip = row.Label + " / " + row.Binding.propertyName +
+                "\n" + text("Double-click to locate this object in Hierarchy.", "双击在 Hierarchy 中定位此对象。");
             if (row.Binding.propertyName.StartsWith("m_SizeDelta.", StringComparison.Ordinal))
                 tooltip += "\n" + text("Size Delta is relative to the anchors. Stretched width/height also depend on the parent and anchors.",
                     "Size Delta 是相对锚点的尺寸差；拉伸后的实际宽高还取决于父级与锚点。");
@@ -504,6 +553,14 @@ namespace URflow
             }
             switch (source)
             {
+                case "扫描面板当前无法定位对象，请等待扫描完成。":
+                    return text("Wait until the scan finishes before locating an object.", source);
+                case "扫描条目不属于当前结果，请重新扫描。":
+                    return text("This row does not belong to the current scan. Rescan before locating it.", source);
+                case "扫描对应的界面对象已失效，请重新扫描。":
+                    return text("The scanned UI object is no longer available. Rescan before locating it.", source);
+                case "扫描对象不在原界面层级中，请重新扫描。":
+                    return text("The target is outside the scanned UI hierarchy. Rescan before locating it.", source);
                 case "当前界面中找不到该动画属性对应的对象。":
                     return text("The animated object could not be found in the current UI.", source);
                 case "仅支持 Transform / RectTransform 的位置、缩放与 RectTransform Size Delta 属性，请取消选择其他属性。":
@@ -652,8 +709,8 @@ namespace URflow
 
         internal void CancelPending()
         {
+            CleanupNavigationCapture();
             EditorApplication.delayCall -= ReadPreview;
-            EditorApplication.delayCall -= ReadSelection;
             if (_applyCallback != null) EditorApplication.delayCall -= _applyCallback;
             _applyCallback = null;
             _pending = false;

@@ -229,6 +229,33 @@ namespace URflow
             finally { GL.End(); }
         }
 
+        internal static void DrawCloseIcon(Rect rect)
+        {
+            if (!IsRepaint()) return;
+            GL.PushMatrix();
+            try
+            {
+                GL.LoadPixelMatrix();
+                RenderCloseIcon(rect, Color.white * GUI.color);
+            }
+            finally { GL.PopMatrix(); }
+        }
+
+        // Centered geometry avoids font baselines and inherited text offsets.
+        // The caller owns projection and clipping, as with RenderControlLine.
+        internal static void RenderCloseIcon(Rect rect, Color color)
+        {
+            if (!ValidRect(rect)) return;
+            // Keep the end caps off pixel-center ties for a symmetric small glyph.
+            float halfSpan = Mathf.Min(3.6f, Mathf.Min(rect.width, rect.height) * 0.5f - 2f);
+            if (halfSpan <= 0f) return;
+            Vector2 center = rect.center;
+            RenderControlLine(center + new Vector2(-halfSpan, -halfSpan),
+                center + new Vector2(halfSpan, halfSpan), color, 1.6f);
+            RenderControlLine(center + new Vector2(-halfSpan, halfSpan),
+                center + new Vector2(halfSpan, -halfSpan), color, 1.6f);
+        }
+
         // Only tool/settings sheets opt into the preview's restrained permanent edge glow.
         internal static void DrawPanelEdge(Rect rect, float radius = CornerRadius)
         {

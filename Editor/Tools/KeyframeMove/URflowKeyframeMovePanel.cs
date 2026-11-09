@@ -34,8 +34,11 @@ namespace URflow
             GUIStyle selectedButton = Button(selected, false, true);
             GUIStyle primaryButton = Button(primary, true);
             GUIStyle closeButton = Button(button);
-            closeButton.fontSize = 16;
             closeButton.padding = new RectOffset(0, 0, 0, 0);
+            closeButton.margin = new RectOffset(0, 0, 0, 0);
+            closeButton.contentOffset = Vector2.zero;
+            closeButton.fixedWidth = 0f;
+            closeButton.fixedHeight = 0f;
             try
             {
                 float width = _layoutSize.x;
@@ -45,7 +48,8 @@ namespace URflow
                 heading.normal.textColor = new Color(.87f, .88f, .9f);
                 GUI.Label(new Rect(16f, 12f, width - 74f, 24f), text("Keyframe Move", "关键帧移动"), heading);
                 CloseRect = new Rect(width - 42f, 12f, 26f, 24f);
-                if (GUI.Button(CloseRect, new GUIContent("×", text("Close", "关闭")), closeButton)) close();
+                if (GUI.Button(CloseRect, new GUIContent(string.Empty, text("Close", "关闭")), closeButton)) close();
+                URflowVisuals.DrawCloseIcon(CloseRect);
                 DrawDivider(new Rect(0f, 50f, width, 1f));
                 // One page: the anchor and result list use the same scan and explicit check list.
                 BodyRect = new Rect(0f, 56f, width, Mathf.Max(0f, height - 118f));

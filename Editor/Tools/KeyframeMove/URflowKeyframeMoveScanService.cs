@@ -295,40 +295,54 @@ namespace URflow
             return Math.Abs((double)target - anchor) <= tolerance;
         }
 
-        // UI selection is an optional view filter. Empty selection must return no keys,
-        // and reading it must never alter the full scan's application scope or validity.
-        internal static bool TryGetSelectedBindingKeys(URflowKeyframeMoveScanPreview preview,
-            out List<string> keys, out string error)
+        // Use the saved scan root and binding rather than the current Unity selection.
+        // This helper may be called from OnGUI: it does not read preview values or mutate assets.
+        internal static bool TryResolveRowGameObject(URflowKeyframeMoveScanPreview preview,
+            URflowKeyframeMoveScanRow row, out GameObject target, out string error)
         {
-            keys = new List<string>();
+            target = null;
             error = null;
-            if (!URflowKeyframeMoveService.CanOperate(out error)) return false;
-            if (preview == null || !preview.IsValid)
+            if (preview == null || row == null || !preview.Contains(row) || preview.CandidateKeys == null ||
+                !preview.CandidateKeys.Contains(URflowKeyframeMoveService.BindingKey(row.Binding)))
             {
-                error = "请先扫描当前片段，再筛选选中属性。";
+                error = "扫描条目不属于当前结果，请重新扫描。";
+                return false;
+            }
+            GameObject root = preview.Root;
+            if (root == null || EditorUtility.IsPersistent(root) || !root.scene.IsValid())
+            {
+                error = "扫描对应的界面对象已失效，请重新扫描。";
                 return false;
             }
             try
             {
-                URflowKeyframeMoveService.Context context =
-                    URflowKeyframeMoveService.CaptureContext(preview.Window, true);
-                ValidatePreviewContext(context, preview);
-                List<EditorCurveBinding> selected = URflowKeyframeMoveService.ReadSelectedBindings(
-                    context.Window, context.State, context.Clip, true);
-                var supported = new List<EditorCurveBinding>();
-                foreach (EditorCurveBinding binding in selected)
+                UnityEngine.Object animated = AnimationUtility.GetAnimatedObject(root, row.Binding);
+                target = animated as GameObject;
+                Component component = animated as Component;
+                if (target == null && component != null) target = component.gameObject;
+                if (target == null)
                 {
-                    string unsupported;
-                    if (URflowKeyframeMoveService.IsSupportedBinding(binding, out unsupported) &&
-                        preview.CandidateKeys.Contains(URflowKeyframeMoveService.BindingKey(binding)))
-                        supported.Add(binding);
+                    Transform transform = string.IsNullOrEmpty(row.Binding.path) ? root.transform :
+                        root.transform.Find(row.Binding.path);
+                    if (transform != null) target = transform.gameObject;
                 }
-                keys = URflowKeyframeMoveService.BindingKeys(supported);
+                if (target == null)
+                {
+                    error = "当前界面中找不到该动画属性对应的对象。";
+                    return false;
+                }
+                if (target != root && !target.transform.IsChildOf(root.transform))
+                {
+                    target = null;
+                    error = "扫描对象不在原界面层级中，请重新扫描。";
+                    return false;
+                }
                 return true;
             }
             catch (Exception exception)
             {
                 URflowKeyframeMoveService.RethrowExitGUI(exception);
+                target = null;
                 error = URflowKeyframeMoveService.FriendlyError(exception);
                 return false;
             }
