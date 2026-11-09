@@ -65,6 +65,13 @@ All notable changes to URflow will be documented in this file.
 - Validation: all 17 Editor sources compile at warning level 4 with warnings as errors, and source hashes match cb860096. A clean, user-approved v1.0.4-c1 project using the separately installed Unity 2022.3.56f1c1 confirms the D: staged package and passes 111 checks: math 19, window/sheet geometry 15, close animation 14, selected-property service 19 and scan 44. Legacy unified-page and stretched-layout UI automation each time out with zero checks because the global delayCall queue does not execute in this hidden startup; these runs are not counted as passed or treated as proof of a product defect. Native window pixel capture is unavailable, and full native interactions and production-scene appearance remain pending.
 - Save the four UI source changes as cb860096ce861eab926c4273bd0156a7dbf5c96f on feature/v1.0.4; documentation is saved with its accompanying commit (see Git history). Preserve the seven unrelated pre-existing .meta edits. Formal version fields remain 1.0.3; target v1.0.4 is unreleased. No merge, push, tag or release.
 
+#### 2026-11-09 curve endpoint halo refinement
+
+- Reduce the halo at both the curve origin and the blue endpoint to 40% of its prior strength, smoothly returning to full strength over about 24 editor logical units along the sampled curve. Keep the central halo, opaque stroke, antialiasing fringe, gradient colors, geometry and editing/animation algorithms unchanged.
+- Validation: all 17 Editor sources strictly compile with warning level 4 and warnings as errors; 21 offscreen before/after checks pass for ease, linear and steep curves. Actual endpoint halo pixels are weaker, while central halo and opaque stroke pixels and exact geometry values remain unchanged. The comparison images were inspected. These are offscreen checks, not complete native-window or production-scene acceptance; the prior 111 checks were not rerun.
+- Save the single renderer-source change as f5469ae7555f932b21aa85924f35dad347f3d754 on feature/v1.0.4. Preserve previous evidence and all pre-existing .meta edits; synchronize this continuous micro-adjustment's final dual-end result to the tutorial and records. Formal version fields remain 1.0.3; target v1.0.4 is unreleased, with no merge, push, tag or release.
+
+
 ## [1.0.3] - 2026-09-03
 
 > Code changes in this release landed between 2026-04-16 and 2026-04-22 but were
