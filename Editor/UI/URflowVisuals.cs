@@ -202,6 +202,33 @@ namespace URflow
             finally { GL.End(); }
         }
 
+        // The caller owns projection and clipping, as with RenderCurve.
+        internal static void RenderControlLine(Vector2 from, Vector2 to, Color color, float width)
+        {
+            if (!Finite(from.x) || !Finite(from.y) || !Finite(to.x) || !Finite(to.y)
+                || !Finite(width) || width <= 0f) return;
+            Vector2 direction = to - from;
+            float length = direction.magnitude;
+            if (!Finite(length) || length <= 0.0001f || !SetLinePass()) return;
+
+            Vector2 normal = new Vector2(-direction.y, direction.x) / length;
+            Vector2 inner = normal * (width * 0.5f);
+            Vector2 outer = normal * (width * 0.5f + 0.55f);
+            Color clear = color;
+            clear.a = 0f;
+            GL.Begin(GL.TRIANGLES);
+            try
+            {
+                Quad(from + inner, from + outer, to + outer, to + inner,
+                    color, clear, clear, color);
+                Quad(from - inner, from - outer, to - outer, to - inner,
+                    color, clear, clear, color);
+                Quad(from + inner, from - inner, to - inner, to + inner,
+                    color, color, color, color);
+            }
+            finally { GL.End(); }
+        }
+
         // Only tool/settings sheets opt into the preview's restrained permanent edge glow.
         internal static void DrawPanelEdge(Rect rect, float radius = CornerRadius)
         {

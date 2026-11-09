@@ -348,9 +348,9 @@ namespace URflow
                 DrawGridClipped(irL, crL);
                 DrawDiag(irL);
 
-                // Handles, curve, control points — same coord system, can overflow
-                DrawHandleLines(irL);
+                // Curve, handles, control points — same coord system, can overflow
                 DrawCurveLine(irL);
+                DrawHandleLines(irL);
                 DrawControlPoints(irL);
 
                 GL.PopMatrix();
@@ -405,15 +405,9 @@ namespace URflow
             Vector2 p3 = new Vector2(r.xMax, r.y);
             Vector2 p1 = N2R(_x1, _y1, r);
             Vector2 p2 = N2R(_x2, _y2, r);
-            EnsureMat();
-            _mat.SetPass(0);
-            GL.Begin(GL.LINES);
-            GL.Color(HandleCol * GUI.color);
-            GL.Vertex3(p0.x, p0.y, 0);
-            GL.Vertex3(p1.x, p1.y, 0);
-            GL.Vertex3(p3.x, p3.y, 0);
-            GL.Vertex3(p2.x, p2.y, 0);
-            GL.End();
+            Color color = HandleCol * GUI.color;
+            URflowVisuals.RenderControlLine(p0, p1, color, 2f);
+            URflowVisuals.RenderControlLine(p3, p2, color, 2f);
         }
 
         private void DrawCurveLine(Rect r)
