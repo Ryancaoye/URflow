@@ -78,7 +78,7 @@ const doc = new Document({
         new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 100 }, children: [new TextRun({ text: "使用指南与更新记录", size: 28, color: "000000" })] }),
         new Paragraph({ spacing: { before: 1500 } }),
         new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Inspired by Flow for After Effects", size: 20, color: "000000", italics: true })] }),
-        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 100 }, children: [new TextRun({ text: "适用版本 v1.0.3  文档更新 2026-11-07", size: 22, color: "000000" })] }),
+        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 100 }, children: [new TextRun({ text: "适用版本 v1.0.3  文档更新 2026-11-09", size: 22, color: "000000" })] }),
         new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "功能建议与问题反馈 liuyiran02@corp.netease.com", size: 20, color: "555555" })] }),
       ]
     },
@@ -390,6 +390,12 @@ const doc = new Document({
         h3("本轮验证和保存"),
         p("本轮全部 17 个 Editor 源文件按 warning level 4、warnings as errors 严格编译通过，无诊断，冻结源哈希一致。独立 Unity 2022.3.56f1、Direct3D11 核对实际加载本轮 C: 暂存包；数学 19、原选中属性服务 19、扫描回归 44、统一页面 252（156 原生事件、96 状态）、新增拉伸布局服务 36 和新增拉伸布局界面 56（40 原生事件、16 状态），共 426 项检查通过。统一页面覆盖 320×560、320×820、480×720 及中英文，新增布局界面覆盖前两种尺寸及中英文。引擎中复现旧位置单独对齐的 35 / 65，新配对服务和原生勾选至 Apply 均恢复 50 / 80，原生 Undo 恢复整片段。未取得整窗像素截图，未在制作场景试用，也未复现原用户片段的精确采样时点。本轮没有手动写入 G: 制作工程。"),
         p("目标版本仍为未发布的 v1.0.4，正式版本字段保持 1.0.3。本轮代码保存于 feature/v1.0.4 的 bacfc91507ca84c5358d91833a7bdfc2e8050e30，并已安装到 D: 开发包；3 个修改源码文件的安装哈希与测试暂存一致。教程和更新记录随对应文档提交保存，具体提交见 Git 历史。未修改稳定目录代码，未合并、推送、打标签或正式发布。"),
+
+        h2("2026年11月9日工作资料迁回 D 盘"),
+        p("开发与测试资料已统一迁回 D:/插件/URFLOW。独立 Unity 工程现位于 D:/插件/URFLOW/6-开发/测试验证/v1.0.4，使用 Unity 2022.3.56f1；插件开发目录仍为 D:/插件/URFLOW/6-开发/URflow-v1.0.4。"),
+        p("插件暂存资料、文档同步资料和工程接入备份也已迁入该总目录，原 C: 的 9 个工作目录在逐文件 SHA-256 核对后移除，共保留 2181 个文件。旧报告中的 C: 路径保留为历史记录，现存资料位置以总索引的新旧对应表为准。"),
+        p("今后新增、迁移、重命名或删除工作目录，变更文件存储位置或新建 worktree 前，先说明具体路径、用途和影响，获得用户确认后再执行。已有目录内的正常开发、源码编辑和验证继续按任务授权推进。"),
+        p("本轮 D: 测试工程实际启动成功，确认加载新的 D: 暂存包，19 项现有数学检查、17 个 Editor 文件严格编译及 7 个 PowerShell 入口语法检查通过。11 月 7 日的 426 项功能检查是历史结果，本轮未重跑。插件功能源码和 G: 制作工程未修改；正式版本字段仍为 1.0.3，v1.0.4 未发布。"),
 
       ]
     }
