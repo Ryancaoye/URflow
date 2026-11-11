@@ -96,6 +96,8 @@ All notable changes to URflow will be documented in this file.
 - Read-only logs confirm package registration, successful compilation, script reload and editor stability after import. Menu/window use remains unconfirmed; no plugin source change, new code test run or version upgrade. A tracked SVN baseline lacks this local dependency and a revert chain exists, but today's invocation is unproven and ordinary SVN update is not claimed to always remove it.
 - Preserve flat backups and restore/verification receipts in the existing D archive, update installation recovery guidance and this maintenance record. Earlier source tests stay historical; target v1.0.4 remains unreleased.
 
+- Subsequent user confirmation: the Window menu entry is visible and the URflow window opens normally. This is user confirmation, not direct assistant UI inspection.
+
 ## [1.0.3] - 2026-09-03
 
 > Code changes in this release landed between 2026-04-16 and 2026-04-22 but were
