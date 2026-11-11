@@ -78,7 +78,7 @@ const doc = new Document({
         new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 100 }, children: [new TextRun({ text: "使用指南与更新记录", size: 28, color: "000000" })] }),
         new Paragraph({ spacing: { before: 1500 } }),
         new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Inspired by Flow for After Effects", size: 20, color: "000000", italics: true })] }),
-        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 100 }, children: [new TextRun({ text: "适用版本 v1.0.3  文档更新 2026-11-09", size: 22, color: "000000" })] }),
+        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 100 }, children: [new TextRun({ text: "适用版本 v1.0.3  文档更新 2026-11-11", size: 22, color: "000000" })] }),
         new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "功能建议与问题反馈 liuyiran02@corp.netease.com", size: 20, color: "555555" })] }),
       ]
     },
@@ -114,7 +114,7 @@ const doc = new Document({
         p([code("https://github.com/Ryancaoye/URflow.git#v1.0.3")]),
         p("省略 tag 会跟随默认分支。v1.0.2 不包含后续 Apply / CurveGuard 修复，团队协作建议锁定 v1.0.3。"),
         p("离线：解压 URflow_v1.0.3.zip，将完整 URflow 文件夹放到 Assets/URflow；或选择 Add package from disk 并选中 URflow/package.json。保留 .meta 和图标，不要只复制脚本。"),
-        p("等待编译完成后，通过 Window → URflow 或 Ctrl+Shift+E 打开。设置页的检查更新会打开 Package Manager，当前没有自动联网检查。"),
+        p("编译后通过 Window → URflow 或 Ctrl+Shift+E 打开。检查更新入口只打开 Package Manager。更新或代班后入口消失时，核对 Packages/manifest.json 的包依赖；开发版恢复步骤见末尾 2026年11月11日记录。"),
 
         h2("文件结构"),
         new Table({ columnWidths: [4680, 4680], rows: [
@@ -418,6 +418,10 @@ const doc = new Document({
         h2("2026年11月9日扫描交互与对象定位优化"),
         p("Move 默认检查当前片段全部支持的位置、Size Delta 与缩放曲线，只列出差异和无法处理项，保留搜索与勾选应用。Differences 和 Animation selection 控件移除，Proportional 改为整行模式按钮，开启时黄色高亮；关闭叉居中。双击对象标题或复选框外的属性/数值区域，可在 Hierarchy 闪亮定位对象，保持当前选中对象与 Animation 编辑状态。较早日期中的双页签及筛选说明属于历史用法，以本节为准。"),
         p("独立 Unity 2022.3.56f1c1 严格编译 17 份源码及 36 项定向检查通过：17 项局部原生事件/定位调用、13 项运行状态、2 项离屏像素、4 项静态接入。关闭叉在 1x/2x 下居中；整窗与制作场景仍待试用，不声称全局 delayCall 自动派发。源码为 3e48d10；v1.0.4 未发布，正式字段仍为 1.0.3。"),
+
+        h2("2026年11月11日制作工程包引用恢复"),
+        p("开发版更新或代班后入口消失，先检查项目包依赖。可在 Package Manager 选择 Add package from disk，并选中 D:/插件/URFLOW/6-开发/URflow-v1.0.4/package.json 恢复引用。等编译和重载结束再查看 Window > URflow。还原工程配置可能移除本地引用，普通 SVN update 并非必删；项目仅保留一份插件安装。"),
+        p("2026年11月11日已恢复制作工程的本地包引用，包注册、编译、脚本重载及后续导入完成，编辑器稳定；菜单与窗口仍待确认。助手仅修改 manifest 的 URFlow 依赖，其他 89 项依赖和文本不变；锁文件由 Unity 自动增加一项，原 112 项保持。源码与版本未变，旧功能检查未重跑。"),
 
       ]
     }

@@ -90,6 +90,12 @@ All notable changes to URflow will be documented in this file.
 - Validation: 17 product sources strictly compile; 36 focused checks pass once as 17 local native event/Hierarchy checks, 13 reflected runtime-state checks, 2 actual offscreen close-pixel checks and 4 static integration checks. Mode algorithms and transient-clip Apply execute directly; the proportional GUI route and full DrawBody cleanup hookup are static proof. Full-window capture, global delayCall dispatch and production-scene acceptance are not claimed.
 - Preserve failed diagnostics for the close pixel tie and clipped mouse release; final capture cleanup retains other controls and 1x/2x close centers pass without relaxed tolerance. Save exactly four product sources as 3e48d102b9deee46df0fce8dc41a55e38e89d2bb on feature/v1.0.4. Earlier checks stay historical; formal version fields remain 1.0.3 and v1.0.4 is unreleased.
 
+#### 2026-11-11 restore local project package reference
+
+- Restore the already authorized local com.liuyiran.urflow reference in the production project's manifest only; keep the other 89 dependencies and all other text unchanged. Unity automatically adds one lock entry, retaining all 112 prior entries.
+- Read-only logs confirm package registration, successful compilation, script reload and editor stability after import. Menu/window use remains unconfirmed; no plugin source change, new code test run or version upgrade. A tracked SVN baseline lacks this local dependency and a revert chain exists, but today's invocation is unproven and ordinary SVN update is not claimed to always remove it.
+- Preserve flat backups and restore/verification receipts in the existing D archive, update installation recovery guidance and this maintenance record. Earlier source tests stay historical; target v1.0.4 remains unreleased.
+
 ## [1.0.3] - 2026-09-03
 
 > Code changes in this release landed between 2026-04-16 and 2026-04-22 but were
