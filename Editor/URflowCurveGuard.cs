@@ -57,6 +57,8 @@ namespace URflow
             // Clip + binding so we can re-read fresh data
             public AnimationClip clip;
             public EditorCurveBinding binding;
+            public bool guardOut, guardIn;
+            public int keyCount;
 
             // Snapshot of the keyframe values right after apply.
             // Used to detect Unity-side resets vs. intentional user edits.
@@ -85,6 +87,9 @@ namespace URflow
         static URflowCurveGuard()
         {
             EditorApplication.update += OnEditorUpdate;
+            // An Undo may legitimately remove the weighted flag. Never restore the
+            // stale apply snapshot over the state the user has just undone/redone.
+            Undo.undoRedoPerformed += ClearAll;
         }
 
         // ───────────────────────────────────────────
@@ -99,23 +104,42 @@ namespace URflow
             AnimationClip clip, EditorCurveBinding binding,
             int idxA, int idxB,
             float x1, float y1, float x2, float y2,
-            Keyframe kA, Keyframe kB)
+            Keyframe kA, Keyframe kB, int mode = 0)
         {
+            if (clip == null || idxA < 0 || idxB <= idxA || mode < 0 || mode > 2) return;
+            AnimationCurve curve = AnimationUtility.GetEditorCurve(clip, binding);
+            if (curve == null || idxB >= curve.length) return;
             PairKey key = MakeKey(clip, binding, idxA, idxB);
-            CachedCurve cc = new CachedCurve
+            bool ownsOut = mode == 0 || mode == 1, ownsIn = mode == 0 || mode == 2;
+
+            // A newly applied side supersedes older protection of that same side.
+            // Adjacent pairs own opposite sides of their shared key and remain valid.
+            List<PairKey> existing = new List<PairKey>(_tracked.Keys);
+            foreach (PairKey oldKey in existing)
             {
-                x1 = x1, y1 = y1, x2 = x2, y2 = y2,
-                clip = clip,
-                binding = binding,
-                snapOutTangentA = kA.outTangent,
-                snapOutWeightA = kA.outWeight,
-                snapWeightedModeA = kA.weightedMode,
-                snapInTangentB = kB.inTangent,
-                snapInWeightB = kB.inWeight,
-                snapWeightedModeB = kB.weightedMode,
-                snapValueA = kA.value,
-                snapValueB = kB.value,
-            };
+                if (oldKey.Equals(key) || oldKey.clipId != key.clipId || oldKey.bindingPath != key.bindingPath) continue;
+                CachedCurve old = _tracked[oldKey];
+                if (ownsOut && oldKey.idxA == idxA) old.guardOut = false;
+                if (ownsIn && oldKey.idxB == idxB) old.guardIn = false;
+                if (!old.guardOut && !old.guardIn) _tracked.Remove(oldKey);
+                else _tracked[oldKey] = old;
+            }
+
+            CachedCurve cc;
+            _tracked.TryGetValue(key, out cc);
+            if (ownsOut) { cc.x1 = x1; cc.y1 = y1; cc.guardOut = true; }
+            if (ownsIn) { cc.x2 = x2; cc.y2 = y2; cc.guardIn = true; }
+            cc.clip = clip;
+            cc.binding = binding;
+            cc.keyCount = curve.length;
+            cc.snapOutTangentA = kA.outTangent;
+            cc.snapOutWeightA = kA.outWeight;
+            cc.snapWeightedModeA = kA.weightedMode;
+            cc.snapInTangentB = kB.inTangent;
+            cc.snapInWeightB = kB.inWeight;
+            cc.snapWeightedModeB = kB.weightedMode;
+            cc.snapValueA = kA.value;
+            cc.snapValueB = kB.value;
             _tracked[key] = cc;
         }
 
@@ -143,6 +167,7 @@ namespace URflow
         public static void ClearAll()
         {
             _tracked.Clear();
+            _frameCounter = 0;
         }
 
         public static int TrackedCount { get { return _tracked.Count; } }
@@ -167,10 +192,8 @@ namespace URflow
                 PairKey pk = kvp.Key;
                 CachedCurve cc = kvp.Value;
 
-                if (cc.clip == null) continue; // clip was destroyed
-
-                AnimationCurve curve = AnimationUtility.GetEditorCurve(cc.clip, cc.binding);
-                if (curve == null || curve.length <= Mathf.Max(pk.idxA, pk.idxB))
+                AnimationCurve curve = cc.clip != null ? AnimationUtility.GetEditorCurve(cc.clip, cc.binding) : null;
+                if (curve == null || curve.length != cc.keyCount || curve.length <= Mathf.Max(pk.idxA, pk.idxB))
                 {
                     // Curve gone or indices out of range — schedule removal
                     if (fixKeys == null) fixKeys = new List<PairKey>();
@@ -185,12 +208,8 @@ namespace URflow
                 // Only trigger on weightedMode reset (Unity strips weighted mode
                 // when dragging keyframes). Do NOT trigger on tangent/weight value
                 // changes — those are intentional user edits in the Curves view.
-                bool resetDetected = false;
-
-                if (!HasWeightedOut(kA.weightedMode) || !HasWeightedIn(kB.weightedMode))
-                {
-                    resetDetected = true;
-                }
+                bool resetDetected = (cc.guardOut && !HasWeightedOut(kA.weightedMode))
+                    || (cc.guardIn && !HasWeightedIn(kB.weightedMode));
 
                 if (resetDetected)
                 {
@@ -220,7 +239,7 @@ namespace URflow
                     }
 
                     AnimationCurve curve = AnimationUtility.GetEditorCurve(cc.clip, cc.binding);
-                    if (curve == null || curve.length <= Mathf.Max(pk.idxA, pk.idxB))
+                    if (curve == null || curve.length != cc.keyCount || curve.length <= Mathf.Max(pk.idxA, pk.idxB))
                     {
                         toRemove.Add(pk);
                         continue;
@@ -230,42 +249,25 @@ namespace URflow
                     Keyframe kA = keys[pk.idxA];
                     Keyframe kB = keys[pk.idxB];
 
-                    // Recompute tangents based on the NEW time/value positions
-                    float dur = kB.time - kA.time;
-                    float valRange = kB.value - kA.value;
-
-                    if (Mathf.Approximately(dur, 0f))
+                    bool restoreOut = cc.guardOut && !HasWeightedOut(kA.weightedMode);
+                    bool restoreIn = cc.guardIn && !HasWeightedIn(kB.weightedMode);
+                    if (!restoreOut && !restoreIn) continue;
+                    int restoreMode = restoreOut ? (restoreIn ? 0 : 1) : 2;
+                    AnimationCurve newCurve;
+                    List<URflowApplyHelper.AppliedPair> restoredPairs;
+                    if (!URflowApplyHelper.TryBuildAppliedCurve(curve, new[] { pk.idxA, pk.idxB },
+                        cc.x1, cc.y1, cc.x2, cc.y2, restoreMode, out newCurve, out restoredPairs))
                     {
                         toRemove.Add(pk);
                         continue;
                     }
-
-                    float ts = valRange / dur;
-
-                    float outTanA = Mathf.Approximately(cc.x1, 0f)
-                        ? (cc.y1 > 0 ? 1000f : 0f)
-                        : (cc.y1 / cc.x1) * ts;
-
-                    float inTanB = Mathf.Approximately(cc.x2, 1f)
-                        ? (cc.y2 < 1f ? 1000f : 0f)
-                        : ((1f - cc.y2) / (1f - cc.x2)) * ts;
-
-                    kA.outTangent = outTanA;
-                    kA.outWeight = cc.x1;
-                    kA.weightedMode = HasWeightedIn(kA.weightedMode)
-                        ? WeightedMode.Both : WeightedMode.Out;
-
-                    kB.inTangent = inTanB;
-                    kB.inWeight = 1f - cc.x2;
-                    kB.weightedMode = HasWeightedOut(kB.weightedMode)
-                        ? WeightedMode.Both : WeightedMode.In;
-
-                    keys[pk.idxA] = kA;
-                    keys[pk.idxB] = kB;
-
-                    AnimationCurve newCurve = new AnimationCurve(keys);
                     Undo.RecordObject(cc.clip, "URflow Auto-Restore Curve");
                     AnimationUtility.SetEditorCurve(cc.clip, cc.binding, newCurve);
+
+                    AnimationCurve stored = AnimationUtility.GetEditorCurve(cc.clip, cc.binding);
+                    if (stored == null) { toRemove.Add(pk); continue; }
+                    kA = stored.keys[pk.idxA];
+                    kB = stored.keys[pk.idxB];
 
                     // Update snapshot
                     CachedCurve updated = cc;

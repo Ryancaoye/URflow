@@ -18,7 +18,7 @@ namespace URflow
             if (infos.Count == 0) return false;
 
             URflowAnimHelper.KeyframeInfo info = infos[0];
-            List<int> indices = info.selectedIndices;
+            List<int> indices = new List<int>(info.selectedIndices);
             indices.Sort();
             if (indices.Count < 2) return false;
 
@@ -28,13 +28,14 @@ namespace URflow
             Keyframe[] keyframes = freshCurve.keys;
             int idxA = indices[0];
             int idxB = indices[1];
-            if (idxA >= keyframes.Length || idxB >= keyframes.Length) return false;
+            if (idxA < 0 || idxB < 0 || idxA >= keyframes.Length || idxB >= keyframes.Length) return false;
 
             Keyframe kA = keyframes[idxA];
             Keyframe kB = keyframes[idxB];
 
             float dur = kB.time - kA.time;
             float valRange = kB.value - kA.value;
+            if (!IsFinite(dur) || !IsFinite(valRange)) return false;
 
             if (Mathf.Approximately(dur, 0f) || Mathf.Approximately(valRange, 0f))
             {
@@ -46,29 +47,22 @@ namespace URflow
             bool aW = (kA.weightedMode == WeightedMode.Out || kA.weightedMode == WeightedMode.Both);
             bool bW = (kB.weightedMode == WeightedMode.In || kB.weightedMode == WeightedMode.Both);
 
-            if (aW && bW)
-            {
-                x1 = kA.outWeight;
-                float sA = Mathf.Approximately(tangentScale, 0f) ? 0f : kA.outTangent / tangentScale;
-                y1 = sA * x1;
-                x2 = 1f - kB.inWeight;
-                float sB = Mathf.Approximately(tangentScale, 0f) ? 0f : kB.inTangent / tangentScale;
-                y2 = 1f - sB * (1f - x2);
-            }
-            else
-            {
-                float dw = 1f / 3f;
-                float sA = Mathf.Approximately(tangentScale, 0f) ? 0f : kA.outTangent / tangentScale;
-                x1 = dw; y1 = sA * x1;
-                float sB = Mathf.Approximately(tangentScale, 0f) ? 0f : kB.inTangent / tangentScale;
-                x2 = 1f - dw; y2 = 1f - sB * (1f - x2);
-            }
+            // Each tangent side can be weighted independently. The unweighted side
+            // uses the Hermite-equivalent third, without discarding the other weight.
+            x1 = aW ? kA.outWeight : 1f / 3f;
+            x2 = 1f - (bW ? kB.inWeight : 1f / 3f);
+            y1 = kA.outTangent / tangentScale * x1;
+            y2 = 1f - kB.inTangent / tangentScale * (1f - x2);
+            if (!IsFinite(x1) || !IsFinite(y1) || !IsFinite(x2) || !IsFinite(y2)) return false;
 
             x1 = Mathf.Clamp01(x1);
             x2 = Mathf.Clamp01(x2);
-            y1 = Mathf.Clamp(y1, -0.5f, 1.5f);
-            y2 = Mathf.Clamp(y2, -0.5f, 1.5f);
             return true;
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
         }
     }
 }

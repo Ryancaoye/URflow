@@ -44,116 +44,8 @@ namespace URflow
 
             foreach (URflowAnimHelper.KeyframeInfo info in keyframeInfos)
             {
-                List<int> indices = info.selectedIndices;
-                indices.Sort();
-
-                // IMPORTANT: Get FRESH curve data from the clip, not a stale snapshot
-                AnimationCurve freshCurve = info.GetFreshCurve();
-                if (freshCurve == null) continue;
-
-                Keyframe[] keyframes = freshCurve.keys;
-                bool modified = false;
-
-                for (int i = 0; i < indices.Count - 1; i++)
-                {
-                    int idxA = indices[i];
-                    int idxB = indices[i + 1];
-                    if (idxA >= keyframes.Length || idxB >= keyframes.Length) continue;
-
-                    Keyframe kA = keyframes[idxA];
-                    Keyframe kB = keyframes[idxB];
-
-                    float dur = kB.time - kA.time;
-                    float valRange = kB.value - kA.value;
-                    if (Mathf.Approximately(dur, 0f)) continue;
-
-                    float ts = valRange / dur;
-
-                    float outTanA = Mathf.Approximately(x1, 0f)
-                        ? (y1 > 0 ? 1000f : 0f)
-                        : (y1 / x1) * ts;
-
-                    float inTanB = Mathf.Approximately(x2, 1f)
-                        ? (y2 < 1f ? 1000f : 0f)
-                        : ((1f - y2) / (1f - x2)) * ts;
-
-                    if (mode == 0 || mode == 1)
-                    {
-                        kA.outTangent = outTanA;
-                        kA.outWeight = x1;
-                        kA.weightedMode = (kA.weightedMode == WeightedMode.In)
-                            ? WeightedMode.Both : WeightedMode.Out;
-                    }
-                    if (mode == 0 || mode == 2)
-                    {
-                        kB.inTangent = inTanB;
-                        kB.inWeight = 1f - x2;
-                        kB.weightedMode = (kB.weightedMode == WeightedMode.Out)
-                            ? WeightedMode.Both : WeightedMode.In;
-                    }
-
-                    keyframes[idxA] = kA;
-                    keyframes[idxB] = kB;
-                    modified = true;
-                }
-
-                if (!modified) continue;
-
-                AnimationCurve newCurve = new AnimationCurve(keyframes);
-
-                // First: set Broken + Free tangent mode on all affected keyframes
-                // This must happen BEFORE setting weighted data, because
-                // SetKeyBroken/SetKeyLeftTangentMode can reset weightedMode
-                for (int i = 0; i < indices.Count; i++)
-                {
-                    int idx = indices[i];
-                    if (idx >= keyframes.Length) continue;
-                    AnimationUtility.SetKeyBroken(newCurve, idx, true);
-                    AnimationUtility.SetKeyLeftTangentMode(newCurve, idx, AnimationUtility.TangentMode.Free);
-                    AnimationUtility.SetKeyRightTangentMode(newCurve, idx, AnimationUtility.TangentMode.Free);
-                }
-
-                // Then: re-apply weighted data on top (in case Broken/Free reset it)
-                Keyframe[] fixedKeys = newCurve.keys;
-                for (int i = 0; i < indices.Count - 1; i++)
-                {
-                    int idxA = indices[i];
-                    int idxB = indices[i + 1];
-                    if (idxA >= fixedKeys.Length || idxB >= fixedKeys.Length) continue;
-
-                    fixedKeys[idxA].outTangent = keyframes[idxA].outTangent;
-                    fixedKeys[idxA].outWeight = keyframes[idxA].outWeight;
-                    fixedKeys[idxA].weightedMode = keyframes[idxA].weightedMode;
-
-                    fixedKeys[idxB].inTangent = keyframes[idxB].inTangent;
-                    fixedKeys[idxB].inWeight = keyframes[idxB].inWeight;
-                    fixedKeys[idxB].weightedMode = keyframes[idxB].weightedMode;
-                }
-                newCurve = new AnimationCurve(fixedKeys);
-
-                // Single write to clip
-                Undo.RecordObject(info.clip, "URflow Apply Curve");
-                AnimationUtility.SetEditorCurve(info.clip, info.binding, newCurve);
-
-                // Re-read the curve Unity actually stored and update guard snapshots
-                AnimationCurve storedCurve = AnimationUtility.GetEditorCurve(info.clip, info.binding);
-                if (storedCurve != null)
-                {
-                    for (int i = 0; i < indices.Count - 1; i++)
-                    {
-                        int idxA = indices[i];
-                        int idxB = indices[i + 1];
-                        if (idxA < storedCurve.length && idxB < storedCurve.length)
-                        {
-                            URflowCurveGuard.Register(
-                                info.clip, info.binding, idxA, idxB,
-                                x1, y1, x2, y2,
-                                storedCurve.keys[idxA], storedCurve.keys[idxB]);
-                        }
-                    }
-                }
-
-                anyApplied = true;
+                if (ApplyToClip(info.clip, info.binding, info.selectedIndices, x1, y1, x2, y2, mode))
+                    anyApplied = true;
             }
 
             if (anyApplied)
@@ -165,6 +57,109 @@ namespace URflow
             {
                 _pendingDialog = "Could not apply the curve.\nMake sure you select at least 2 keyframes on the same property.";
             }
+        }
+
+        internal struct AppliedPair
+        {
+            internal int IndexA, IndexB;
+        }
+
+        // Shared by the Animation-window entry and the independent regression checks.
+        internal static bool ApplyToClip(AnimationClip clip, EditorCurveBinding binding,
+            IList<int> selectedIndices, float x1, float y1, float x2, float y2, int mode)
+        {
+            if (clip == null) return false;
+            AnimationCurve curve = AnimationUtility.GetEditorCurve(clip, binding);
+            AnimationCurve applied;
+            List<AppliedPair> pairs;
+            if (!TryBuildAppliedCurve(curve, selectedIndices, x1, y1, x2, y2, mode, out applied, out pairs))
+                return false;
+
+            Undo.RecordObject(clip, "URflow Apply Curve");
+            AnimationUtility.SetEditorCurve(clip, binding, applied);
+
+            AnimationCurve stored = AnimationUtility.GetEditorCurve(clip, binding);
+            if (stored != null)
+            {
+                Keyframe[] keys = stored.keys;
+                foreach (AppliedPair pair in pairs)
+                    URflowCurveGuard.Register(clip, binding, pair.IndexA, pair.IndexB,
+                        x1, y1, x2, y2, keys[pair.IndexA], keys[pair.IndexB], mode);
+            }
+            return true;
+        }
+
+        internal static bool TryBuildAppliedCurve(AnimationCurve source, IList<int> selectedIndices,
+            float x1, float y1, float x2, float y2, int mode,
+            out AnimationCurve result, out List<AppliedPair> pairs)
+        {
+            result = null;
+            pairs = new List<AppliedPair>();
+            if (source == null || selectedIndices == null || mode < 0 || mode > 2) return false;
+            List<int> indices = new List<int>();
+            foreach (int index in selectedIndices)
+                if (index >= 0 && index < source.length && !indices.Contains(index)) indices.Add(index);
+            indices.Sort();
+            if (indices.Count < 2) return false;
+
+            Keyframe[] desired = source.keys;
+            bool[] changeOut = new bool[desired.Length], changeIn = new bool[desired.Length];
+            for (int i = 0; i < indices.Count - 1; i++)
+            {
+                int a = indices[i], b = indices[i + 1];
+                float duration = desired[b].time - desired[a].time;
+                if (Mathf.Approximately(duration, 0f)) continue;
+                float scale = (desired[b].value - desired[a].value) / duration;
+                if (mode == 0 || mode == 1)
+                {
+                    desired[a].outTangent = Mathf.Approximately(x1, 0f)
+                        ? (y1 > 0f ? 1000f : 0f) : y1 / x1 * scale;
+                    desired[a].outWeight = x1;
+                    desired[a].weightedMode |= WeightedMode.Out;
+                    changeOut[a] = true;
+                }
+                if (mode == 0 || mode == 2)
+                {
+                    desired[b].inTangent = Mathf.Approximately(x2, 1f)
+                        ? (y2 < 1f ? 1000f : 0f) : (1f - y2) / (1f - x2) * scale;
+                    desired[b].inWeight = 1f - x2;
+                    desired[b].weightedMode |= WeightedMode.In;
+                    changeIn[b] = true;
+                }
+                pairs.Add(new AppliedPair { IndexA = a, IndexB = b });
+            }
+            if (pairs.Count == 0) return false;
+
+            // Tangent modes belong to individual sides. Breaking a key permits changing
+            // one side without turning the unselected side from Auto/Linear into Free.
+            AnimationCurve configured = new AnimationCurve(source.keys);
+            for (int i = 0; i < desired.Length; i++)
+            {
+                if (!changeOut[i] && !changeIn[i]) continue;
+                AnimationUtility.SetKeyBroken(configured, i, true);
+                if (changeIn[i]) AnimationUtility.SetKeyLeftTangentMode(configured, i, AnimationUtility.TangentMode.Free);
+                if (changeOut[i]) AnimationUtility.SetKeyRightTangentMode(configured, i, AnimationUtility.TangentMode.Free);
+            }
+
+            // Unity's mode setters may recalculate this key or its neighbors. Retain
+            // their resulting mode bits, but restore every untouched numeric field.
+            Keyframe[] keysWithModes = configured.keys;
+            for (int i = 0; i < desired.Length; i++)
+            {
+                keysWithModes[i].time = desired[i].time;
+                keysWithModes[i].value = desired[i].value;
+                keysWithModes[i].inTangent = desired[i].inTangent;
+                keysWithModes[i].outTangent = desired[i].outTangent;
+                keysWithModes[i].inWeight = desired[i].inWeight;
+                keysWithModes[i].outWeight = desired[i].outWeight;
+                keysWithModes[i].weightedMode = desired[i].weightedMode;
+            }
+            result = new AnimationCurve(keysWithModes)
+            {
+                preWrapMode = source.preWrapMode,
+                postWrapMode = source.postWrapMode
+            };
+            return true;
         }
     }
 }
