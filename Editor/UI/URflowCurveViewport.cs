@@ -13,6 +13,8 @@ namespace URflow
         private Vector2 _start;
         private double _started = -1d;
         private bool _initialized;
+        private float _dragMinimumY = MinimumY;
+        private float _dragMaximumY = MaximumY;
 
         internal Vector2 Range { get { return _range; } }
 
@@ -46,10 +48,15 @@ namespace URflow
             return true;
         }
 
-        internal void BeginDrag()
+        internal void BeginDrag(float y = 0f)
         {
             _started = -1d;
             _target = _range;
+            // READ can supply a finite curve outside the manual editing range.
+            // Keep its initial value reachable throughout this gesture, without
+            // allowing a horizontal drag to silently clip it to the normal limits.
+            _dragMinimumY = Mathf.Min(MinimumY, y);
+            _dragMaximumY = Mathf.Max(MaximumY, y);
         }
 
         internal Vector2 ToScreen(float x, float y, Rect rect)
@@ -67,7 +74,7 @@ namespace URflow
         internal Vector2 Drag(Vector2 value, Vector2 delta, Rect rect, bool shift, float lockedY)
         {
             float span = _range.y - _range.x;
-            float y = shift ? lockedY : Mathf.Clamp(value.y - delta.y / rect.height * span, MinimumY, MaximumY);
+            float y = shift ? lockedY : Mathf.Clamp(value.y - delta.y / rect.height * span, _dragMinimumY, _dragMaximumY);
             Vector2 result = new Vector2(Mathf.Clamp01(value.x + delta.x / rect.width), y);
             float lower = _range.x, upper = _range.y;
             // Integrate mouse deltas instead of remapping the absolute cursor after a fit.

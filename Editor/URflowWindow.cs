@@ -488,7 +488,7 @@ namespace URflow
                 else if (d2 < Radius * 3f) _dragging = 2;
                 if (_dragging != 0)
                 {
-                    _curveViewport.BeginDrag();
+                    _curveViewport.BeginDrag(_dragging == 1 ? _y1 : _y2);
                     GUIUtility.hotControl = _dragControlId;
                     e.Use();
                     GUI.FocusControl(null);

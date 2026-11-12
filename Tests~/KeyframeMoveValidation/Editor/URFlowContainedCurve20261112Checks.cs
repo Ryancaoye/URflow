@@ -87,6 +87,18 @@ namespace URflow
             Check(viewport.Range.x <= -2f && viewport.Range.y >= 3f, "New extreme preset values are contained immediately before any fit animation");
             viewport.BeginDrag(); Vector2 shifted = viewport.Drag(new Vector2(.7f, 3f), new Vector2(0f, 80f), r, true, 1f);
             Check(shifted.y == 1f, "Shift locks the second handle to the endpoint's normalized Y=1");
+            foreach (float readY in new[] { -4.75f, 6.25f })
+            {
+                viewport.Fit(-4.75f, 6.25f, 30d, false); viewport.BeginDrag(readY);
+                Vector2 initial = new Vector2(.3f, readY);
+                Vector2 horizontal = viewport.Drag(initial, new Vector2(8f, 0f), r, false, 0f);
+                Check(horizontal.y == readY && horizontal.x > initial.x, "Horizontal dragging preserves finite READ value outside manual limits Y=" + readY);
+                float inwardDelta = readY < 0f ? -4f : 4f;
+                Vector2 inward = viewport.Drag(horizontal, new Vector2(0f, inwardDelta), r, false, 0f);
+                Vector2 reversed = viewport.Drag(inward, new Vector2(0f, -inwardDelta), r, false, 0f);
+                Check(Mathf.Abs(inward.y - readY) < .3f && Mathf.Abs(reversed.y - readY) < .00001f,
+                    "Extreme READ vertical drag remains continuous and reversible within the gesture Y=" + readY);
+            }
         }
 
         private static void PixelChecks()
@@ -163,6 +175,17 @@ namespace URflow
             Check(Dragging == 0, "Escape releases the actual curve capture");
             SetCurve(.24f, -2f, .72f, 3f); Frame();
             Check(Y1 == -2f && Y2 == 3f, "Actual FloatField repaint retains both full-range -2 and 3 values"); AssertWindowContained();
+            SetCurve(.24f, -4.75f, .72f, 6.25f); Frame();
+            foreach (int which in new[] { 1, 2 })
+            {
+                start = Point(which); float readY = which == 1 ? Y1 : Y2;
+                Send(window, EventType.MouseDown, start, Vector2.zero);
+                Send(window, EventType.MouseDrag, start + new Vector2(8f, 0f), new Vector2(8f, 0f)); Frame();
+                Check((which == 1 ? Y1 : Y2) == readY && Dragging == which,
+                    "Actual horizontal native drag does not clip the extreme READ value for handle " + which);
+                Send(window, EventType.MouseUp, start + new Vector2(8f, 0f), Vector2.zero); Frame();
+            }
+            SetCurve(.24f, -2f, .72f, 3f); Frame();
             start = Point(2); Send(window, EventType.MouseDown, start, Vector2.zero);
             Send(window, EventType.MouseDrag, start + new Vector2(5f, 20f), new Vector2(5f, 20f), true); Frame();
             Check(Y2 == 1f && Dragging == 2, "Native Shift drag locks the blue-side control to normalized Y=1");
