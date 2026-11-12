@@ -59,6 +59,7 @@ namespace URflow
         private static bool _curveValid;
         private static Rect _curveRect;
         private static Vector4 _curveParameters;
+        private static Vector2 _curveDisplayRange;
         private static bool _edgeValid;
         private static Rect _edgeRect;
         private static float _edgeRadius;
@@ -145,12 +146,17 @@ namespace URflow
 
         internal static void DrawCurve(Rect r, float x1, float y1, float x2, float y2)
         {
+            DrawCurve(r, x1, y1, x2, y2, 0f, 1f);
+        }
+
+        internal static void DrawCurve(Rect r, float x1, float y1, float x2, float y2, float yMin, float yMax)
+        {
             if (!IsRepaint()) return;
             GL.PushMatrix();
             try
             {
                 GL.LoadPixelMatrix();
-                RenderCurve(r, x1, y1, x2, y2, GUI.color);
+                RenderCurve(r, x1, y1, x2, y2, GUI.color, yMin, yMax);
             }
             finally { GL.PopMatrix(); }
         }
@@ -159,9 +165,16 @@ namespace URflow
         // The caller owns its render target, projection, and clipping; no GUI state is read here.
         internal static void RenderCurve(Rect r, float x1, float y1, float x2, float y2, Color tint)
         {
-            if (!ValidRect(r) || !Finite(x1) || !Finite(y1) || !Finite(x2) || !Finite(y2)) return;
+            RenderCurve(r, x1, y1, x2, y2, tint, 0f, 1f);
+        }
+
+        internal static void RenderCurve(Rect r, float x1, float y1, float x2, float y2, Color tint, float yMin, float yMax)
+        {
+            if (!ValidRect(r) || !Finite(x1) || !Finite(y1) || !Finite(x2) || !Finite(y2)
+                || !Finite(yMin) || !Finite(yMax) || yMax <= yMin) return;
             Vector4 parameters = new Vector4(x1, y1, x2, y2);
-            if (!_curveValid || _curveRect != r || !_curveParameters.Equals(parameters))
+            Vector2 displayRange = new Vector2(yMin, yMax);
+            if (!_curveValid || _curveRect != r || !_curveParameters.Equals(parameters) || _curveDisplayRange != displayRange)
             {
                 float distanceFromStart = 0f;
                 for (int i = 0; i <= CurveSegments; i++)
@@ -171,7 +184,7 @@ namespace URflow
                     float value = CubicBezierConverter.Evaluate(x1, y1, x2, y2, t);
                     if (!Finite(value)) { _curveValid = false; return; }
                     CurvePoints[i] = new Vector2(Mathf.LerpUnclamped(r.x, r.xMax, t),
-                        Mathf.LerpUnclamped(r.yMax, r.y, value));
+                        Mathf.LerpUnclamped(r.yMax, r.y, (value - yMin) / (yMax - yMin)));
                     CurveColors[i] = CurveColor(t);
                     if (i > 0) distanceFromStart += Vector2.Distance(CurvePoints[i - 1], CurvePoints[i]);
                     CurveGlowStrengths[i] = distanceFromStart;
@@ -186,6 +199,7 @@ namespace URflow
                 BuildNormals(CurvePoints, CurveNormals, CurveSegments + 1, false);
                 _curveRect = r;
                 _curveParameters = parameters;
+                _curveDisplayRange = displayRange;
                 _curveValid = true;
             }
             if (!SetLinePass()) return;

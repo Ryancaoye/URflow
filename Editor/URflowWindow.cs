@@ -30,6 +30,8 @@ namespace URflow
         private const float Radius = 7f;
         private const float Pad = 16f;
         private Rect _curveInnerRect;
+        private Rect _curveCanvasRect;
+        private readonly URflowCurveViewport _curveViewport = new URflowCurveViewport();
         private double _edgeStarted = -1d;
 
         // ── Colors (Flow-inspired Theme) ──
@@ -126,6 +128,7 @@ namespace URflow
 
         private void OnDisable()
         {
+            EndCurveDrag();
             if (_toolsHost != null) _toolsHost.Dispose();
             _toolsHost = null;
             URflowVisuals.Dispose();
@@ -138,10 +141,16 @@ namespace URflow
             if (_toolsHost != null && !_showSettings) _toolsHost.RefreshIfOpen();
         }
 
+        private void OnLostFocus()
+        {
+            EndCurveDrag();
+        }
+
         private void Update()
         {
             // Handle deferred dialogs outside of OnGUI
             URflowApplyHelper.CheckPendingDialog();
+            if (_curveViewport.Tick(EditorApplication.timeSinceStartup)) Repaint();
         }
 
         private void OnGUI()
@@ -281,8 +290,7 @@ namespace URflow
         }
 
         /// <summary>
-        /// Draw LOGO as absolute-positioned overlay, not in layout flow.
-        /// Control handles can draw over it.
+        /// Draw the logo in the reserved header above the bounded curve canvas.
         /// </summary>
         private void DrawTitleOverlay()
         {
@@ -310,33 +318,28 @@ namespace URflow
 
         private void DrawCurveEditor()
         {
-            // Reserve extra space above and below for overflow drawing
-            float overflow = 60f;
-            float overflowTop = 48f;
-            float overflowBot = 10f;
-            GUILayout.Space(overflowTop);
+            // Header and graph have fixed client-area bounds. Nothing draws over the title or fields.
+            GUILayout.Space(48f);
             float curveHeight = Mathf.Clamp(position.height - (_filter == 2 ? 480f : 450f), 120f, 260f);
             Rect cr = GUILayoutUtility.GetRect(position.width - Pad * 2, curveHeight);
             cr.x += Pad;
             cr.width -= Pad * 2;
-            GUILayout.Space(overflowBot);
+            GUILayout.Space(10f);
 
             // Only draw the dark background for the actual curve box
             URflowVisuals.DrawSurface(cr, URflowVisuals.GraphBackground, new Color(0.23f, 0.23f, 0.23f));
 
-            float m = 20f;
+            // 21-point hit radius and 16-point glow both fit inside this margin.
+            float m = 24f;
             Rect ir = new Rect(cr.x + m, cr.y + m, cr.width - m * 2, cr.height - m * 2);
             _curveInnerRect = ir;
+            _curveCanvasRect = cr;
+            if (_dragging == 0) _curveViewport.Fit(_y1, _y2, EditorApplication.timeSinceStartup, true);
 
             if (Event.current.type == EventType.Repaint)
             {
-                // All GL drawing in one BeginClip with a large rect
-                // that extends above and below the curve box.
-                // Key: BeginClip origin = bigClip.position, all GL coords
-                // are relative to this origin.
-                Rect bigClip = new Rect(cr.x, cr.y - overflow, cr.width, cr.height + overflow * 2);
-                GUI.BeginClip(bigClip);
-                Vector2 o = bigClip.position;
+                GUI.BeginClip(cr);
+                Vector2 o = cr.position;
 
                 Rect crL = new Rect(cr.x - o.x, cr.y - o.y, cr.width, cr.height);
                 Rect irL = new Rect(ir.x - o.x, ir.y - o.y, ir.width, ir.height);
@@ -348,7 +351,7 @@ namespace URflow
                 DrawGridClipped(irL, crL);
                 DrawDiag(irL);
 
-                // Curve, handles, control points — same coord system, can overflow
+                // Curve, guides and handles share the same fitted Y mapping.
                 DrawCurveLine(irL);
                 DrawHandleLines(irL);
                 DrawControlPoints(irL);
@@ -356,6 +359,8 @@ namespace URflow
                 GL.PopMatrix();
                 GUI.EndClip();
             }
+
+            DrawCurveReferenceLabels(ir);
 
             if (!_showSaveDialog)
                 HandleMouse(_curveInnerRect);
@@ -385,7 +390,27 @@ namespace URflow
                     GL.Vertex3(Mathf.Min(r.xMax, clip.xMax), y, 0);
                 }
             }
+            GL.Color(new Color(0.36f, 0.36f, 0.36f) * GUI.color);
+            for (int i = 0; i <= 1; i++)
+            {
+                float y = _curveViewport.ToScreen(0f, i, r).y;
+                GL.Vertex3(r.x, y, 0f);
+                GL.Vertex3(r.xMax, y, 0f);
+            }
             GL.End();
+        }
+
+        private void DrawCurveReferenceLabels(Rect r)
+        {
+            GUIStyle style = new GUIStyle(EditorStyles.miniLabel);
+            style.alignment = TextAnchor.MiddleRight;
+            style.normal.textColor = new Color(0.7f, 0.7f, 0.7f);
+            for (int i = 0; i <= 1; i++)
+            {
+                float y = _curveViewport.ToScreen(0f, i, r).y;
+                if (i == 1 && Mathf.Abs(y - _curveViewport.ToScreen(0f, 0f, r).y) < 18f) continue;
+                GUI.Label(new Rect(r.x - 21f, y - 8f, 16f, 16f), i.ToString(), style);
+            }
         }
 
         private void DrawDiag(Rect r)
@@ -394,17 +419,19 @@ namespace URflow
             _mat.SetPass(0);
             GL.Begin(GL.LINES);
             GL.Color(DiagCol * GUI.color);
-            GL.Vertex3(r.x, r.yMax, 0);
-            GL.Vertex3(r.xMax, r.y, 0);
+            Vector2 start = _curveViewport.ToScreen(0f, 0f, r);
+            Vector2 end = _curveViewport.ToScreen(1f, 1f, r);
+            GL.Vertex3(start.x, start.y, 0);
+            GL.Vertex3(end.x, end.y, 0);
             GL.End();
         }
 
         private void DrawHandleLines(Rect r)
         {
-            Vector2 p0 = new Vector2(r.x, r.yMax);
-            Vector2 p3 = new Vector2(r.xMax, r.y);
-            Vector2 p1 = N2R(_x1, _y1, r);
-            Vector2 p2 = N2R(_x2, _y2, r);
+            Vector2 p0 = _curveViewport.ToScreen(0f, 0f, r);
+            Vector2 p3 = _curveViewport.ToScreen(1f, 1f, r);
+            Vector2 p1 = _curveViewport.ToScreen(_x1, _y1, r);
+            Vector2 p2 = _curveViewport.ToScreen(_x2, _y2, r);
             Color color = HandleCol * GUI.color;
             URflowVisuals.RenderControlLine(p0, p1, color, 2f);
             URflowVisuals.RenderControlLine(p3, p2, color, 2f);
@@ -412,13 +439,14 @@ namespace URflow
 
         private void DrawCurveLine(Rect r)
         {
-            URflowVisuals.DrawCurve(r, _x1, _y1, _x2, _y2);
+            Vector2 range = _curveViewport.Range;
+            URflowVisuals.DrawCurve(r, _x1, _y1, _x2, _y2, range.x, range.y);
         }
 
         private void DrawControlPoints(Rect r)
         {
-            DrawCircle(N2R(_x1, _y1, r), 4.5f, P1Col);
-            DrawCircle(N2R(_x2, _y2, r), 4.5f, P2Col);
+            DrawCircle(_curveViewport.ToScreen(_x1, _y1, r), 4.5f, P1Col);
+            DrawCircle(_curveViewport.ToScreen(_x2, _y2, r), 4.5f, P2Col);
         }
 
         private void DrawCircle(Vector2 center, float rad, Color col)
@@ -445,23 +473,22 @@ namespace URflow
             _dragControlId = GUIUtility.GetControlID(FocusType.Passive);
             if (!GUI.enabled)
             {
-                _dragging = 0;
-                if (GUIUtility.hotControl == _dragControlId) GUIUtility.hotControl = 0;
+                EndCurveDrag();
                 return;
             }
             Event e = Event.current;
-            Vector2 p1s = N2R(_x1, _y1, ir);
-            Vector2 p2s = N2R(_x2, _y2, ir);
+            Vector2 p1s = _curveViewport.ToScreen(_x1, _y1, ir);
+            Vector2 p2s = _curveViewport.ToScreen(_x2, _y2, ir);
 
-            if (e.type == EventType.MouseDown && e.button == 0)
+            if (e.type == EventType.MouseDown && e.button == 0 && _curveCanvasRect.Contains(e.mousePosition))
             {
-                // Use distance to control points directly, no bounding rect limit
                 float d1 = Vector2.Distance(e.mousePosition, p1s);
                 float d2 = Vector2.Distance(e.mousePosition, p2s);
                 if (d1 < Radius * 3f && d1 <= d2) _dragging = 1;
                 else if (d2 < Radius * 3f) _dragging = 2;
                 if (_dragging != 0)
                 {
+                    _curveViewport.BeginDrag();
                     GUIUtility.hotControl = _dragControlId;
                     e.Use();
                     GUI.FocusControl(null);
@@ -469,24 +496,22 @@ namespace URflow
             }
             else if (e.type == EventType.MouseDrag && _dragging != 0)
             {
-                Vector2 n = R2N(e.mousePosition, ir);
-                float nx = Mathf.Clamp01(n.x);
-                float ny = Mathf.Clamp(n.y, -2f, 3f);
-
-                // Shift held: lock Y to horizontal (Y=0 for P1, Y=1 for P2)
-                if (e.shift)
-                    ny = _dragging == 1 ? 0f : 1f;
-
-                if (_dragging == 1) { _x1 = nx; _y1 = ny; }
-                else { _x2 = nx; _y2 = ny; }
+                Vector2 previous = _dragging == 1 ? new Vector2(_x1, _y1) : new Vector2(_x2, _y2);
+                Vector2 n = _curveViewport.Drag(previous, e.delta, ir, e.shift, _dragging == 1 ? 0f : 1f);
+                if (_dragging == 1) { _x1 = n.x; _y1 = n.y; }
+                else { _x2 = n.x; _y2 = n.y; }
                 SyncParam();
                 e.Use();
                 Repaint();
             }
             else if (e.type == EventType.MouseUp && _dragging != 0)
             {
-                _dragging = 0;
-                GUIUtility.hotControl = 0;
+                EndCurveDrag();
+                e.Use();
+            }
+            else if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Escape && _dragging != 0)
+            {
+                EndCurveDrag();
                 e.Use();
             }
 
@@ -494,12 +519,18 @@ namespace URflow
             {
                 float d1 = Vector2.Distance(e.mousePosition, p1s);
                 float d2 = Vector2.Distance(e.mousePosition, p2s);
-                if (d1 < Radius * 2.5f || d2 < Radius * 2.5f)
-                {
-                    Rect cursorArea = new Rect(ir.x - 40, ir.y - 80, ir.width + 80, ir.height + 160);
-                    EditorGUIUtility.AddCursorRect(cursorArea, MouseCursor.MoveArrow);
-                }
+                if (d1 < Radius * 2.5f) EditorGUIUtility.AddCursorRect(new Rect(p1s.x - 18f, p1s.y - 18f, 36f, 36f), MouseCursor.MoveArrow);
+                if (d2 < Radius * 2.5f) EditorGUIUtility.AddCursorRect(new Rect(p2s.x - 18f, p2s.y - 18f, 36f, 36f), MouseCursor.MoveArrow);
             }
+        }
+
+        private void EndCurveDrag()
+        {
+            if (_dragging == 0) return;
+            _dragging = 0;
+            if (GUIUtility.hotControl == _dragControlId) GUIUtility.hotControl = 0;
+            _curveViewport.Fit(_y1, _y2, EditorApplication.timeSinceStartup, true);
+            Repaint();
         }
 
         // ═══════ Parameter Input ═══════
@@ -541,20 +572,28 @@ namespace URflow
             s2.margin = new RectOffset(0, 0, 4, 0);
 
             GUILayout.Label("X1", s1, GUILayout.Width(18));
-            _x1 = Mathf.Clamp(EditorGUILayout.FloatField(_x1, GUILayout.Width(45)), 0f, 1f);
+            _x1 = CurveParameterField(_x1, true);
             GUILayout.FlexibleSpace();
             GUILayout.Label("Y1", s1, GUILayout.Width(18));
-            _y1 = Mathf.Clamp(EditorGUILayout.FloatField(_y1, GUILayout.Width(45)), -0.5f, 1.5f);
+            _y1 = CurveParameterField(_y1, false);
             GUILayout.FlexibleSpace();
             GUILayout.Label("X2", s2, GUILayout.Width(18));
-            _x2 = Mathf.Clamp(EditorGUILayout.FloatField(_x2, GUILayout.Width(45)), 0f, 1f);
+            _x2 = CurveParameterField(_x2, true);
             GUILayout.FlexibleSpace();
             GUILayout.Label("Y2", s2, GUILayout.Width(18));
-            _y2 = Mathf.Clamp(EditorGUILayout.FloatField(_y2, GUILayout.Width(45)), -0.5f, 1.5f);
+            _y2 = CurveParameterField(_y2, false);
 
             if (EditorGUI.EndChangeCheck()) { SyncParam(); Repaint(); }
             GUILayout.Space(Pad);
             EditorGUILayout.EndHorizontal();
+        }
+
+        private static float CurveParameterField(float value, bool horizontal)
+        {
+            EditorGUI.BeginChangeCheck();
+            float edited = EditorGUILayout.FloatField(value, GUILayout.Width(45));
+            if (!EditorGUI.EndChangeCheck() || float.IsNaN(edited) || float.IsInfinity(edited)) return value;
+            return horizontal ? Mathf.Clamp01(edited) : Mathf.Clamp(edited, URflowCurveViewport.MinimumY, URflowCurveViewport.MaximumY);
         }
 
         // ═══════ Apply ═══════
@@ -1401,29 +1440,17 @@ namespace URflow
                 if (float.TryParse(parts[0], out a) &&
                     float.TryParse(parts[1], out b) &&
                     float.TryParse(parts[2], out c) &&
-                    float.TryParse(parts[3], out d))
+                    float.TryParse(parts[3], out d) &&
+                    !float.IsNaN(a) && !float.IsInfinity(a) && !float.IsNaN(b) && !float.IsInfinity(b) &&
+                    !float.IsNaN(c) && !float.IsInfinity(c) && !float.IsNaN(d) && !float.IsInfinity(d))
                 {
                     _x1 = Mathf.Clamp01(a);
-                    _y1 = Mathf.Clamp(b, -0.5f, 1.5f);
+                    _y1 = Mathf.Clamp(b, URflowCurveViewport.MinimumY, URflowCurveViewport.MaximumY);
                     _x2 = Mathf.Clamp01(c);
-                    _y2 = Mathf.Clamp(d, -0.5f, 1.5f);
+                    _y2 = Mathf.Clamp(d, URflowCurveViewport.MinimumY, URflowCurveViewport.MaximumY);
                     Repaint();
                 }
             }
-        }
-
-        private static Vector2 N2R(float nx, float ny, Rect r)
-        {
-            return new Vector2(
-                Mathf.LerpUnclamped(r.x, r.xMax, nx),
-                Mathf.LerpUnclamped(r.yMax, r.y, ny));
-        }
-
-        private static Vector2 R2N(Vector2 pos, Rect r)
-        {
-            return new Vector2(
-                (pos.x - r.x) / r.width,
-                (r.yMax - pos.y) / r.height);
         }
 
         private static void DrawBorder(Rect r, Color c)
