@@ -98,6 +98,14 @@ All notable changes to URflow will be documented in this file.
 
 - Subsequent user confirmation: the Window menu entry is visible and the URflow window opens normally. This is user confirmation, not direct assistant UI inspection.
 
+#### 2026-11-12 contained curve canvas and directional APPLY
+
+- Restrict APPLY to selected segments' inward sides and preserve outside tangents, weights, modes and wrap. Make CurveGuard directional, discard obsolete key-count snapshots, and clear registrations on Undo/Redo; reapply to register protection again.
+- Keep the graph in fixed client-area bounds. Fit its Y display range to both endpoints and control points, retain 0/1 references, expand near dragged edges, and fit smoothly on release without changing parameters. Preserve curve glow and guide layering.
+- READ preserves finite original Y values, including values outside the editable range; repaint no longer clamps untouched values. Edited fields use the original drag range -2..3; a drag gesture also retains its initial finite READ value outside that range, including during horizontal movement and a return to the start value. Replace the Keyframe Move toggle with mutually exclusive Offset/Ratio buttons while retaining math and zero-baseline rules.
+- Validation: independent Unity 2022.3.56f1c1 strictly compiles 18 product sources at warning level 4 with warnings as errors and unchanged inputs; 908 APPLY/Guard/UndoRedo/READ assertions, 32 native mode-button/math checks, and 148 contained-window/drag/preset/geometry/offscreen checks pass. Four offscreen curve images were inspected and source/staged hashes match. Production-scene and manual pointer-feel acceptance were not performed. Edge expansion may move the control slightly away from the pointer while values remain continuous. Old stages are not added to this count.
+- Saved on feature/v1.0.4 as 0b9ee6e, c481741, 6bd25b9 and 975d2a7. Documentation is saved by the accompanying stage commit; see Git history. Target v1.0.4 is unreleased, formal fields remain 1.0.3, and no merge, push, tag or release was performed.
+
 ## [1.0.3] - 2026-09-03
 
 > Code changes in this release landed between 2026-04-16 and 2026-04-22 but were

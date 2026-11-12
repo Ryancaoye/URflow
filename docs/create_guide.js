@@ -78,7 +78,7 @@ const doc = new Document({
         new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 100 }, children: [new TextRun({ text: "使用指南与更新记录", size: 28, color: "000000" })] }),
         new Paragraph({ spacing: { before: 1500 } }),
         new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Inspired by Flow for After Effects", size: 20, color: "000000", italics: true })] }),
-        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 100 }, children: [new TextRun({ text: "适用版本 v1.0.3  文档更新 2026-11-11", size: 22, color: "000000" })] }),
+        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 100 }, children: [new TextRun({ text: "适用版本 v1.0.3  文档更新 2026-11-12", size: 22, color: "000000" })] }),
         new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "功能建议与问题反馈 liuyiran02@corp.netease.com", size: 20, color: "555555" })] }),
       ]
     },
@@ -424,6 +424,12 @@ const doc = new Document({
         p("2026年11月11日已恢复制作工程的本地包引用，包注册、编译、脚本重载及后续导入完成，编辑器稳定；菜单与窗口仍待确认。助手仅修改 manifest 的 URFlow 依赖，其他 89 项依赖和文本不变；锁文件由 Unity 自动增加一项，原 112 项保持。源码与版本未变，旧功能检查未重跑。"),
 
         p("随后用户确认：Window 菜单入口可见，URflow 窗口正常打开。"),
+
+        h2("2026年11月12日曲线画布与应用范围修复"),
+        p("APPLY 只修改所选关键帧区段朝内的切线方向。例如选中前三帧中的前两帧，修改第一帧右侧和第二帧左侧，保留第二帧右侧至第三帧的曲线。单侧应用按当前方向设置处理；区段外的切线、权重及切线模式继续保留。CurveGuard 只保护登记的方向；Undo 或 Redo 后清空旧登记，避免恢复已撤销的曲线，需要重新 APPLY 才建立保护。"),
+        p("曲线预览使用固定画布，Logo、参数和 APPLY 分别占据各自区域。普通曲线沿用 Y=0～1；控制点超过这个范围时，自动扩大显示范围，同时容纳两个端点、黄色控制点及曲线。0 和 1 的参考线标明尺度；视图缩放只改变显示，不修改曲线参数。拖动采用稳定尺度，接近边缘时扩展，松手后平滑适配。"),
+        p("手动输入 Y 与原有拖动范围统一为 −2～3。READ 保留有限的原始 Y 值，超过该范围也可显示；横向拖动保持 Y，纵向拖动范围包含该次手势的起始值，未编辑的 READ 或预设值不再被重绘截断。关键帧移动改为 Offset / Ratio 两个互斥按钮，中文显示平移 / 比例，默认平移；点击当前模式保持勾选，切换模式清空勾选并重新扫描。平移和比例算法及零基准限制沿用现有规则。"),
+        p("独立 Unity 2022.3.56f1c1 中，18 份源码严格编译，以及 APPLY、CurveGuard、Undo/Redo、READ 的 908 项断言、模式按钮与数学的 32 项检查、画布拖动与显示的 148 项检查通过；四类离屏曲线图已检查。制作场景和真实鼠标操作手感仍待试用，边缘扩展时控制点可能稍离开光标，但参数连续。源码已保存于 feature/v1.0.4 的 0b9ee6e、c481741、6bd25b9、975d2a7；目标 v1.0.4 未发布，正式版本字段仍为 1.0.3。"),
 
       ]
     }

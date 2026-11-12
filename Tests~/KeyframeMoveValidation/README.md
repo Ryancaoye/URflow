@@ -23,7 +23,7 @@
 ## 建立独立工程
 
 1. 使用 Unity 2022.3.56f1 创建独立空工程，关闭此工程的编辑器。
-2. 将本目录 `Editor` 内的全部 `.cs` 文件复制到工程的 `Assets/Editor`。Unity 会为检查源代码生成测试工程自己的 `.meta`。
+2. 将本目录 `Editor` 内的历史检查 `.cs` 文件复制到工程的 `Assets/Editor`。2026-11-12 新增的三个检查按下文放置，不能把引用内部 API 的检查直接编入独立的 Assembly-CSharp-Editor。Unity 会为检查源代码生成测试工程自己的 `.meta`。
 3. 参考 `ProjectTemplate/Packages/manifest.json` 设置本地 `file:` 包依赖。模板仅包含 animation、imgui 和 jsonserialize 模块；不依赖在线 Unity Test Framework。
 4. 修改 `Assets/Editor/URFlowValidationBootstrap.cs` 的 `ExpectedPackagePath`，与 manifest 指向的开发包绝对路径一致。这是加载正确开发副本的强检查。
 5. 使用下方脚本，显式传入本机 Unity 和独立工程路径。不要同时打开同一个测试工程。
@@ -78,3 +78,21 @@ UiKeys 直接设置打开状态并种入只读预览，作为界面布局夹具�
 - `URFlowUiProbeRunner.cs`：等待 editor 稳定、保存报告、恢复语言偏好、可选窗口渲染捕获、退出 Unity。
 
 原始完整日志留在本次独立测试工程 `D:\插件\URFLOW\6-开发\测试验证\v1.0.4\Logs`，本目录仅携带可复用源代码和简要结果。
+
+## 2026-11-12 曲线与移动模式回归
+
+本轮使用已安装的独立引擎 `C:/Program Files/Unity/Hub/Editor/2022.3.56f1c1/Editor/Unity.exe`，测试工程为 `D:/插件/URFLOW/6-开发/测试验证/v1.0.4-c1`，加载既有暂存 `URFlow-v1.0.4-ui-20261109/package`。复用这些目录，不启动 G 盘引擎或制作工程。
+
+新增源码仅用于验证，不随产品 Editor 程序集发布。`URFlowCurveApplyRegressionChecks.cs` 和 `URFlowContainedCurve20261112Checks.cs` 需复制到独立测试包既有 `Editor/Validation`，从同一包程序集访问内部实现；`URFlowMoveMode20261112Checks.cs` 放在独立工程既有 `Assets/Editor`。ContainedCurve 的正常曲线旧基线依赖测试包已有的 `URFlowHandleLinesBaselineVisuals`，可从本轮暂存验证源码获取；不要将这些夹具放入制作工程。
+
+| 入口 | 实际结果 | 覆盖 |
+| --- | --- | --- |
+| `URflow.URFlowCurveApplyRegressionChecks.Run` | 908 断言 PASS | 三帧的相邻段、左右加权/切线模式、单侧与多选 APPLY、CurveGuard、Undo/Redo、实际 Animation READ/APPLY、极端与混合加权 READ |
+| `URflow.URFlowContainedCurve20261112Checks.Run` | 148 断言 PASS | 真实窗口上下拖动、超范围 READ 横拖不截断、可逆调整、捕获释放、Shift、失焦、工具禁用、预设点击、坐标与画布容纳、实际离屏光晕/颜色及缓存更新 |
+| `URFlowMoveMode20261112Checks.Run` | 32 断言 PASS | EN/CN、窄/宽按钮原生点击、互斥模式、当前状态重复点击、扫描禁用及原有平移/倍率数学 |
+
+实际运行脚本位于既有暂存的 `evidence/runners/RunCurveFixes20261112.ps1`，传入上表 `-Entry` 和明确的 `-Phase`，不传 `-Batch`；不要同时打开独立测试工程，也不要加 `-quit`。脚本复用现有 `evidence/fixtures` 输出日志，不创建阶段目录。
+
+证据位于暂存 `evidence/curve-apply-20261112-result.txt`、`evidence/fixtures/contained-curve-20261112-latest-result-path.txt` 所指的最终148项报告和 `evidence/fixtures/curve-fixes-20261112-mode-fixed-164500-818-move-mode-20261112-result.txt`。18 个产品源用独立 c1 编译器在 warn4/warnaserror 下通过，输入 SHA256 不变；`compile/strict-20261112-165702-894.json` 与 `evidence/curve-fixes-20261112-source-match.json` 记录编译及实际测试来源。
+
+正常 0..1 范围曲线与旧基线逐像素一致，四张离屏图已检查；这些结果不代替全窗口截图、制作场景验收或真实鼠标手感。范围扩展时数值连续，但控制点可能稍离鼠标；Undo/Redo 清除旧 Guard 缓存，重新 APPLY 建立保护。初轮模式等宽检查失败后修正产品布局；初轮画布检查因测试未处理 Open 正常的 ExitGUI 控制流失败，修正夹具后完整通过，两次失败报告保留。
