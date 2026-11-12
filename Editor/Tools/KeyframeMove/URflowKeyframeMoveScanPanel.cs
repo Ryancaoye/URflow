@@ -30,6 +30,7 @@ namespace URflow
         internal int SelectedCount { get { return _selected.Count; } }
         internal Rect FirstAnchorRect { get; private set; }
         internal Rect LastAnchorRect { get; private set; }
+        internal Rect OffsetRect { get; private set; }
         internal Rect RatioRect { get; private set; }
         internal bool CanApply
         {
@@ -148,28 +149,20 @@ namespace URflow
                 }
                 GUILayout.Space(6f);
                 bool proportional = _mode == URflowKeyframeMoveMode.Proportional;
-                GUIStyle modeButton = new GUIStyle(proportional ? selected : button)
+                Rect modeRect = GUILayoutUtility.GetRect(0f, 32f, GUILayout.ExpandWidth(true));
+                float modeWidth = Mathf.Max(0f, (modeRect.width - 4f) * 0.5f);
+                OffsetRect = new Rect(modeRect.x, modeRect.y, modeWidth, modeRect.height);
+                RatioRect = new Rect(modeRect.x + modeWidth + 4f, modeRect.y, modeWidth, modeRect.height);
                 {
-                    fontSize = 12, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft,
-                    padding = new RectOffset(10, 82, 0, 0)
-                };
-                RatioRect = GUILayoutUtility.GetRect(0f, 32f, GUILayout.ExpandWidth(true));
-                if (GUI.Button(RatioRect, new GUIContent(text("Proportional", "按比例"),
-                    proportional ? text("Current mode: multiply every keyframe value by the same factor. Click to use a uniform offset.",
-                        "当前模式：所有关键帧数值按同一倍率调整；点击切回整体平移。") :
-                        text("Current mode: shift every keyframe value by the same amount. Click to use proportional adjustment.",
-                            "当前模式：所有关键帧数值整体平移；点击切换为按比例调整。")), modeButton))
-                {
-                    _mode = proportional ? URflowKeyframeMoveMode.Translate : URflowKeyframeMoveMode.Proportional;
-                    Refresh(true);
-                    GUIUtility.ExitGUI();
+                    if (GUI.Button(OffsetRect, new GUIContent(text("Offset", "平移"),
+                        text("Shift every keyframe value by the same amount.", "所有关键帧数值整体平移。")),
+                        !proportional ? selected : button) && proportional)
+                    { _mode = URflowKeyframeMoveMode.Translate; Refresh(true); GUIUtility.ExitGUI(); }
+                    if (GUI.Button(RatioRect, new GUIContent(text("Ratio", "比例"),
+                        text("Multiply every keyframe value by the same factor.", "所有关键帧数值按同一倍率调整。")),
+                        proportional ? selected : button) && !proportional)
+                    { _mode = URflowKeyframeMoveMode.Proportional; Refresh(true); GUIUtility.ExitGUI(); }
                 }
-                GUIStyle modeHint = Label(true);
-                modeHint.fontSize = 11;
-                modeHint.alignment = TextAnchor.MiddleRight;
-                modeHint.normal.textColor = modeButton.normal.textColor;
-                GUI.Label(new Rect(RatioRect.xMax - 80f, RatioRect.y, 68f, RatioRect.height),
-                    proportional ? text("× Ratio", "× 倍率") : text("+ Offset", "+ 平移"), modeHint);
                 GUILayout.Space(6f);
                 float previousLabelWidth = EditorGUIUtility.labelWidth;
                 string search;
@@ -511,7 +504,7 @@ namespace URflow
                 case "拉伸布局的配对属性无法可靠读取或处理，请先修正该轴的位置或 Size Delta。":
                     return text("Paired position/size unavailable", "同轴位置或尺寸无法处理");
                 case "Proportional adjustment cannot use a zero anchor for a nonzero default value.":
-                    return text("Zero anchor · turn off Proportional", "基准帧为 0，请关闭“按比例”");
+                    return text("Zero anchor · choose Offset", "基准帧为 0，请选择“平移”");
             }
             return Message(source, text);
         }
@@ -649,7 +642,8 @@ namespace URflow
                 case "Unity 正在编译或导入资源，请稍后再试。":
                     return text("Unity is compiling or importing assets. Try again when it finishes.", source);
                 case "Proportional adjustment cannot use a zero anchor for a nonzero default value.":
-                    return text(source, "基准帧为 0、默认值非 0 时无法按比例调整，可取消比例选项使用整体平移。");
+                    return text("A zero anchor cannot be scaled to a nonzero default. Choose Offset.",
+                        "基准帧为 0、默认值非 0 时无法按比例调整，请选择“平移”。");
                 case "The selected curve has no keyframes.":
                     return text(source, "该属性没有关键帧。");
                 case "The static default value must be finite.":
