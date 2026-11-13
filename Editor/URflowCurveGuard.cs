@@ -6,9 +6,8 @@ namespace URflow
 {
     /// <summary>
     /// Monitors keyframes that have been assigned URflow bezier curves.
-    /// When Unity's Animation Window resets weighted tangent data (e.g. after
-    /// dragging a keyframe), this guard automatically re-applies the cached
-    /// bezier parameters so the curve shape is preserved.
+    /// Restores a lost weighted flag only for an unchanged tangent on a moved key.
+    /// Manual tangent, weight or mode edits release protection of that direction.
     /// </summary>
     [InitializeOnLoad]
     public static class URflowCurveGuard
@@ -60,18 +59,12 @@ namespace URflow
             public bool guardOut, guardIn;
             public int keyCount;
 
-            // Snapshot of the keyframe values right after apply.
-            // Used to detect Unity-side resets vs. intentional user edits.
-            public float snapOutTangentA;
-            public float snapOutWeightA;
-            public WeightedMode snapWeightedModeA;
-            public float snapInTangentB;
-            public float snapInWeightB;
-            public WeightedMode snapWeightedModeB;
-
-            // The value of each keyframe (not time — time changes on drag)
-            public float snapValueA;
-            public float snapValueB;
+            // Latest observed state, rather than the original APPLY state. The
+            // full ordered key sequence lets us reject ambiguous multi-key moves
+            // and reordering without assigning old protection to another key.
+            public Keyframe[] snapshot;
+            public AnimationUtility.TangentMode snapOutModeA, snapInModeB;
+            public bool snapBrokenA, snapBrokenB;
         }
 
         private static readonly Dictionary<PairKey, CachedCurve> _tracked =
@@ -131,15 +124,7 @@ namespace URflow
             if (ownsIn) { cc.x2 = x2; cc.y2 = y2; cc.guardIn = true; }
             cc.clip = clip;
             cc.binding = binding;
-            cc.keyCount = curve.length;
-            cc.snapOutTangentA = kA.outTangent;
-            cc.snapOutWeightA = kA.outWeight;
-            cc.snapWeightedModeA = kA.weightedMode;
-            cc.snapInTangentB = kB.inTangent;
-            cc.snapInWeightB = kB.inWeight;
-            cc.snapWeightedModeB = kB.weightedMode;
-            cc.snapValueA = kA.value;
-            cc.snapValueB = kB.value;
+            CaptureSnapshot(ref cc, curve, curve.keys, key);
             _tracked[key] = cc;
         }
 
@@ -187,30 +172,63 @@ namespace URflow
             // Collect entries that need re-application
             List<PairKey> fixKeys = null;
 
-            foreach (var kvp in _tracked)
+            // Updating or releasing individual sides must not mutate an active
+            // dictionary enumerator. Adjacent pairs retain their own directions.
+            List<PairKey> observed = new List<PairKey>(_tracked.Keys);
+            foreach (PairKey pk in observed)
             {
-                PairKey pk = kvp.Key;
-                CachedCurve cc = kvp.Value;
+                CachedCurve cc;
+                if (!_tracked.TryGetValue(pk, out cc)) continue;
 
                 AnimationCurve curve = cc.clip != null ? AnimationUtility.GetEditorCurve(cc.clip, cc.binding) : null;
-                if (curve == null || curve.length != cc.keyCount || curve.length <= Mathf.Max(pk.idxA, pk.idxB))
+                if (curve == null || curve.length != cc.keyCount || curve.length <= pk.idxB
+                    || cc.snapshot == null || cc.snapshot.Length != curve.length)
                 {
-                    // Curve gone or indices out of range — schedule removal
-                    if (fixKeys == null) fixKeys = new List<PairKey>();
-                    fixKeys.Add(pk);
+                    _tracked.Remove(pk);
                     continue;
                 }
 
-                Keyframe kA = curve.keys[pk.idxA];
-                Keyframe kB = curve.keys[pk.idxB];
+                Keyframe[] keys = curve.keys;
+                if (PositionChangeCount(cc.snapshot, keys) > 1)
+                {
+                    // Unity has no stable key ID. Group moves, reordered keys and
+                    // replacements are ambiguous, so leave the edited curve alone.
+                    _tracked.Remove(pk);
+                    continue;
+                }
+                Keyframe kA = keys[pk.idxA], kB = keys[pk.idxB];
+                Keyframe beforeA = cc.snapshot[pk.idxA], beforeB = cc.snapshot[pk.idxB];
+                bool movedA = PositionChanged(beforeA, kA), movedB = PositionChanged(beforeB, kB);
 
-                // Check: has Unity reset the weighted data?
-                // Only trigger on weightedMode reset (Unity strips weighted mode
-                // when dragging keyframes). Do NOT trigger on tangent/weight value
-                // changes — those are intentional user edits in the Curves view.
+                // Tangent/weight/mode changes are edits, even if weighted mode was
+                // also cleared. Broken couples both sides of the key; each owner
+                // therefore releases its direction when that key-level state changes.
+                if (cc.guardOut && (beforeA.outTangent != kA.outTangent
+                    || beforeA.outWeight != kA.outWeight
+                    || cc.snapOutModeA != AnimationUtility.GetKeyRightTangentMode(curve, pk.idxA)
+                    || cc.snapBrokenA != AnimationUtility.GetKeyBroken(curve, pk.idxA)))
+                    cc.guardOut = false;
+                if (cc.guardIn && (beforeB.inTangent != kB.inTangent
+                    || beforeB.inWeight != kB.inWeight
+                    || cc.snapInModeB != AnimationUtility.GetKeyLeftTangentMode(curve, pk.idxB)
+                    || cc.snapBrokenB != AnimationUtility.GetKeyBroken(curve, pk.idxB)))
+                    cc.guardIn = false;
+
+                // Disabling Weighted at a stationary key is a deliberate edit.
+                // Never treat it as a request to resurrect the old APPLY cache.
+                if (!movedA && cc.guardOut && !HasWeightedOut(kA.weightedMode)) cc.guardOut = false;
+                if (!movedB && cc.guardIn && !HasWeightedIn(kB.weightedMode)) cc.guardIn = false;
+                if (!cc.guardOut && !cc.guardIn)
+                {
+                    _tracked.Remove(pk);
+                    continue;
+                }
                 bool resetDetected = (cc.guardOut && !HasWeightedOut(kA.weightedMode))
                     || (cc.guardIn && !HasWeightedIn(kB.weightedMode));
-
+                // Observe every move. A later stationary flag change must not be
+                // classified against the key positions from the original APPLY.
+                CaptureSnapshot(ref cc, curve, keys, pk);
+                _tracked[pk] = cc;
                 if (resetDetected)
                 {
                     if (fixKeys == null) fixKeys = new List<PairKey>();
@@ -269,16 +287,8 @@ namespace URflow
                     kA = stored.keys[pk.idxA];
                     kB = stored.keys[pk.idxB];
 
-                    // Update snapshot
                     CachedCurve updated = cc;
-                    updated.snapOutTangentA = kA.outTangent;
-                    updated.snapOutWeightA = kA.outWeight;
-                    updated.snapWeightedModeA = kA.weightedMode;
-                    updated.snapInTangentB = kB.inTangent;
-                    updated.snapInWeightB = kB.inWeight;
-                    updated.snapWeightedModeB = kB.weightedMode;
-                    updated.snapValueA = kA.value;
-                    updated.snapValueB = kB.value;
+                    CaptureSnapshot(ref updated, stored, stored.keys, pk);
                     _tracked[pk] = updated;
 
                     anyFixed = true;
@@ -312,6 +322,29 @@ namespace URflow
         // ───────────────────────────────────────────
         // Helpers
         // ───────────────────────────────────────────
+
+        private static void CaptureSnapshot(ref CachedCurve cc, AnimationCurve curve, Keyframe[] keys, PairKey key)
+        {
+            cc.keyCount = keys.Length;
+            cc.snapshot = keys;
+            cc.snapOutModeA = AnimationUtility.GetKeyRightTangentMode(curve, key.idxA);
+            cc.snapInModeB = AnimationUtility.GetKeyLeftTangentMode(curve, key.idxB);
+            cc.snapBrokenA = AnimationUtility.GetKeyBroken(curve, key.idxA);
+            cc.snapBrokenB = AnimationUtility.GetKeyBroken(curve, key.idxB);
+        }
+
+        private static bool PositionChanged(Keyframe before, Keyframe after)
+        {
+            return before.time != after.time || before.value != after.value;
+        }
+
+        private static int PositionChangeCount(Keyframe[] before, Keyframe[] after)
+        {
+            int count = 0;
+            for (int i = 0; i < before.Length; i++)
+                if (PositionChanged(before[i], after[i]) && ++count > 1) break;
+            return count;
+        }
 
         private static PairKey MakeKey(AnimationClip clip, EditorCurveBinding binding, int idxA, int idxB)
         {
