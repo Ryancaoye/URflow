@@ -106,6 +106,12 @@ All notable changes to URflow will be documented in this file.
 - Validation: independent Unity 2022.3.56f1c1 strictly compiles 18 product sources at warning level 4 with warnings as errors and unchanged inputs; 908 APPLY/Guard/UndoRedo/READ assertions, 32 native mode-button/math checks, and 148 contained-window/drag/preset/geometry/offscreen checks pass. Four offscreen curve images were inspected and source/staged hashes match. Production-scene and manual pointer-feel acceptance were not performed. Edge expansion may move the control slightly away from the pointer while values remain continuous. Old stages are not added to this count.
 - Saved on feature/v1.0.4 as 0b9ee6e, c481741, 6bd25b9 and 975d2a7. Documentation is saved by the accompanying stage commit; see Git history. Target v1.0.4 is unreleased, formal fields remain 1.0.3, and no merge, push, tag or release was performed.
 
+#### 2026-11-13 production package-reference recovery
+
+- The production manifest and lock no longer contained URFlow; the clean manifest matched SVN BASE r9391 with 89 dependencies. Restore only com.liuyiran.urflow=file:D:/插件/URFLOW/6-开发/URflow-v1.0.4, preserving all other dependencies and text. This establishes a return to repository configuration without the local package; it does not prove ordinary SVN update actively removed the reference.
+- Unity automatically resolved and registered 113 packages and added the local URFlow lock entry at 10:54:54. Tundra and URflow.Editor.dll compilation succeeded; recovery-section compiler-error matches are zero. Script reload completed at 11:03:12; editor stability passed at 11:06:56 (20 frames). The menu/window remain pending user confirmation; assistant UI inspection could not initialize. The lock changed from 112 to 113 entries, with only URFlow added and all other objects/text preserved. Only the authorized manifest dependency was manually changed; no source, assets, scenes, prefabs, animation, cache or lock edits.
+- Source and version fields are unchanged at development baseline cf4789a. Previous feature checks were not rerun. Target v1.0.4 remains unreleased and formal fields remain 1.0.3; after documentation QA, save this maintenance record as a separate local commit; its hash is recorded in qa/reference-restore-20261113-commit-receipt.json. No merge, push, tag or release is performed.
+
 ## [1.0.3] - 2026-09-03
 
 > Code changes in this release landed between 2026-04-16 and 2026-04-22 but were
