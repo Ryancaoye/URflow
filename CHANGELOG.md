@@ -112,6 +112,11 @@ All notable changes to URflow will be documented in this file.
 - Unity automatically resolved and registered 113 packages and added the local URFlow lock entry at 10:54:54. Tundra and URflow.Editor.dll compilation succeeded; recovery-section compiler-error matches are zero. Script reload completed at 11:03:12; editor stability passed at 11:06:56 (20 frames). The menu/window remain pending user confirmation; assistant UI inspection could not initialize. The lock changed from 112 to 113 entries, with only URFlow added and all other objects/text preserved. Only the authorized manifest dependency was manually changed; no source, assets, scenes, prefabs, animation, cache or lock edits.
 - Source and version fields are unchanged at development baseline cf4789a. Previous feature checks were not rerun. Target v1.0.4 remains unreleased and formal fields remain 1.0.3; after documentation QA, save this maintenance record as a separate local commit; its hash is recorded in qa/reference-restore-20261113-commit-receipt.json. No merge, push, tag or release is performed.
 
+#### 2026-11-13 package-reference recovery user confirmation
+
+- The user confirmed that Window → URflow is visible and the window opens normally after the Nov 13 recovery, recorded at 11:19. Current status is REFERENCE_RESTORED_USER_CONFIRMED_OPEN. This is user confirmation; the assistant did not directly inspect the UI. Earlier registration, compilation, reload, editor-stability and pending-confirmation records remain preserved.
+- This follow-up only synchronizes documentation. Source/version fields and production files are unchanged, prior feature checks are not rerun, formal version remains 1.0.3 and v1.0.4 remains unreleased. Save the documentation separately as a local commit after QA; its receipt is qa/reference-restore-20261113-user-confirmation-commit-receipt.json. No merge, push, tag or release.
+
 ## [1.0.3] - 2026-09-03
 
 > Code changes in this release landed between 2026-04-16 and 2026-04-22 but were
