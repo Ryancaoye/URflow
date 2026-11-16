@@ -75,17 +75,11 @@ namespace URflow
             if (!TryBuildAppliedCurve(curve, selectedIndices, x1, y1, x2, y2, mode, out applied, out pairs))
                 return false;
 
+            // APPLY is a one-time edit. Subsequent key and tangent changes belong
+            // to Unity; never restore this Bezier over an in-progress manual edit.
+            URflowCurveGuard.ClearAll();
             Undo.RecordObject(clip, "URflow Apply Curve");
             AnimationUtility.SetEditorCurve(clip, binding, applied);
-
-            AnimationCurve stored = AnimationUtility.GetEditorCurve(clip, binding);
-            if (stored != null)
-            {
-                Keyframe[] keys = stored.keys;
-                foreach (AppliedPair pair in pairs)
-                    URflowCurveGuard.Register(clip, binding, pair.IndexA, pair.IndexB,
-                        x1, y1, x2, y2, keys[pair.IndexA], keys[pair.IndexB], mode);
-            }
             return true;
         }
 
