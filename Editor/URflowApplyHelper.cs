@@ -124,15 +124,16 @@ namespace URflow
             }
             if (pairs.Count == 0) return false;
 
-            // Tangent modes belong to individual sides. Breaking a key permits changing
-            // one side without turning the unselected side from Auto/Linear into Free.
+            // Native key edits can recalculate both tangents when either side still
+            // uses an automatic mode. Freeze both sides of affected keys as Free so
+            // Unity preserves manual edits; restore untouched numeric data below.
             AnimationCurve configured = new AnimationCurve(source.keys);
             for (int i = 0; i < desired.Length; i++)
             {
                 if (!changeOut[i] && !changeIn[i]) continue;
                 AnimationUtility.SetKeyBroken(configured, i, true);
-                if (changeIn[i]) AnimationUtility.SetKeyLeftTangentMode(configured, i, AnimationUtility.TangentMode.Free);
-                if (changeOut[i]) AnimationUtility.SetKeyRightTangentMode(configured, i, AnimationUtility.TangentMode.Free);
+                AnimationUtility.SetKeyLeftTangentMode(configured, i, AnimationUtility.TangentMode.Free);
+                AnimationUtility.SetKeyRightTangentMode(configured, i, AnimationUtility.TangentMode.Free);
             }
 
             // Unity's mode setters may recalculate this key or its neighbors. Retain
